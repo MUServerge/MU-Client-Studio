@@ -1,8 +1,9 @@
-using System.Numerics;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Media3D;
 using MUClientStudio.Models.Formats.Bmd;
+using Quaternion = System.Numerics.Quaternion;
+using Vector3 = System.Numerics.Vector3;
 
 namespace MUClientStudio.Rendering.Player;
 
