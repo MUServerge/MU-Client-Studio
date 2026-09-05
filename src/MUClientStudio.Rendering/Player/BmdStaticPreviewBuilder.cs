@@ -137,7 +137,9 @@ public sealed class BmdStaticPreviewBuilder
                 var imageBrush = new ImageBrush(bitmap)
                 {
                     Stretch = Stretch.Fill,
-                    TileMode = TileMode.None
+                    TileMode = TileMode.Tile,
+                    Viewport = new Rect(0, 0, 1, 1),
+                    ViewportUnits = BrushMappingMode.RelativeToBoundingBox
                 };
                 imageBrush.Freeze();
                 diffuseBrush = imageBrush;
@@ -326,7 +328,9 @@ public sealed class BmdStaticPreviewBuilder
 
             pendingPositions[outputIndex] = new Point3D(position.X, position.Y, position.Z);
             pendingNormals[outputIndex] = new Vector3D(transformedNormal.X, transformedNormal.Y, transformedNormal.Z);
-            pendingUvs[outputIndex] = new Point(uv.U, 1.0 - uv.V);
+            // MU/Xulek preserve the BMD V coordinate. Texture decoders normalize the pixel rows;
+            // flipping V here applied the texture to the wrong regions of the character.
+            pendingUvs[outputIndex] = new Point(uv.U, uv.V);
         }
 
         var firstIndex = geometry.Positions.Count;
