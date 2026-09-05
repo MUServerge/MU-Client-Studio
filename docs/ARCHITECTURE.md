@@ -4,29 +4,53 @@
 
 `MUClientStudio.sln`
 
-- `MUClientStudio.App` — WPF shell, window composition, interaction and presentation
-- `MUClientStudio.Core` — local client workspace, file access, profiles, future safe writers
-- `MUClientStudio.Models` — BMD/player domain types, skeleton/animation/model contracts
-- `MuNative` — optional future C++ project only when native reuse is justified
+Target projects:
+
+- `MUClientStudio.App` — WPF shell, V6 Compact presentation, views/view-models and viewport host
+- `MUClientStudio.Core` — workspace, MU client-data readers/resolvers, Player session and character assembly orchestration
+- `MUClientStudio.Models` — WPF-independent BMD/Player/skeleton/animation/domain contracts
+- `MUClientStudio.Rendering` — renderer contracts and GPU-scene implementation; no MU item/class/path business rules
+- optional native renderer project — only if final Player rendering fidelity/performance justifies a C++ backend
+
+Tests are added beside the managed projects as their implementation begins.
 
 ## Dependency direction
 
-`App -> Core`
+- `Models` depends on no application/UI project
+- `Core -> Models`
+- `Rendering -> Models`
+- `App -> Core + Models + Rendering`
 
-`App -> Models`
-
-Core and Models must remain independent from WPF so they can be tested without UI.
+Core, Models and renderer-domain contracts must remain independent from WPF so Player behavior can be tested without UI.
 
 ## Player-first rule
 
-The application exposes only Player functionality until the Player pipeline is complete and validated against real client Data.
+The application exposes only Player functionality until the Player pipeline is complete and validated against representative real EX603 client Data.
+
+## Source hierarchy
+
+1. Main_EX603 — primary source of truth
+2. xulek/muonline-bmd-viewer — implementation/rendering reference
+3. Main5.2 — cross-check only
+
+Main_EX603's executable addresses, injection hooks and process patching are evidence about legacy behavior, not Studio architecture.
 
 ## Native workspace
 
-The user selects either the MU client root or its `Data` folder. The Core resolves the Data root, indexes files from disk, and persists only the selected root in `%LOCALAPPDATA%/MUClientStudio/workspace.json`.
+The user selects either the MU client root or its `Data` folder. Core resolves one canonical Data root and builds a case-insensitive MU-relative asset index without blocking the WPF UI thread.
 
-Raw client data is never uploaded anywhere.
+Persist only editor/workspace state under `%LOCALAPPDATA%/MUClientStudio`. Raw client data stays on disk and is never uploaded by Studio.
 
 ## Renderer boundary
 
-Do not choose a rendering backend by convenience alone. The first renderer implementation must preserve Xulek/Main_EX603 model, skeleton, attachment and texture semantics. A native C++/Direct3D layer can be introduced later if it materially improves fidelity or source reuse.
+Player semantics are resolved before rendering.
+
+`Client Data -> Player Domain/Character Assembly -> IPlayerRenderer -> GPU backend`
+
+The renderer does not decide class paths, item groups, wing model names, attachment bones or compatibility fallback routing.
+
+Do not add C++ for parsing or Player business rules. A thin native GPU backend is allowed later only when measured fidelity/performance requirements justify it.
+
+## Authoritative Player architecture
+
+See `docs/PLAYER_ARCHITECTURE.md` for the exact Player data flow, component boundaries, assembly rules, threading/lifetime model, error handling and implementation phases.
