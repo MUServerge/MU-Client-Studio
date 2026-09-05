@@ -7,7 +7,6 @@ using Microsoft.Win32;
 using MUClientStudio.Core.Formats.Bmd;
 using MUClientStudio.Core.Player;
 using MUClientStudio.Core.Workspace;
-using MUClientStudio.Models.Formats.Bmd;
 using MUClientStudio.Models.Player;
 using MUClientStudio.Rendering.Player;
 
@@ -16,12 +15,11 @@ namespace MUClientStudio.App;
 public partial class MainWindow : Window
 {
     private readonly ClientWorkspaceService _workspaceService = new();
-    private readonly BmdReader _bmdReader = new();
+    private readonly PlayerCharacterLoader _characterLoader = new();
     private readonly BmdStaticPreviewBuilder _previewBuilder = new();
 
     private ClientWorkspace? _workspace;
-    private BmdDocument? _currentDocument;
-    private PlayerClassDefinition? _currentDefinition;
+    private PlayerCharacterSource? _currentCharacter;
     private CancellationTokenSource? _workspaceLoadCts;
     private CancellationTokenSource? _playerLoadCts;
     private long _playerRevision;
@@ -95,7 +93,7 @@ public partial class MainWindow : Window
 
     private async void AnimationCombo_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
     {
-        if (_suppressAnimationSelection || AnimationCombo.SelectedIndex < 0 || _currentDocument is null)
+        if (_suppressAnimationSelection || AnimationCombo.SelectedIndex < 0 || _currentCharacter is null)
             return;
 
         await RenderCurrentActionAsync(AnimationCombo.SelectedIndex);
@@ -197,17 +195,15 @@ public partial class MainWindow : Window
         var token = _playerLoadCts!.Token;
         var revision = Interlocked.Increment(ref _playerRevision);
         Interlocked.Increment(ref _previewRevision);
-        var relativePath = selected.BaseArmorModelPath;
-        var fullPath = ResolveDataPath(_workspace.DataRoot, relativePath);
 
         InspectorClassText.Text = selected.Name;
-        ModelPathText.Text = relativePath;
-        InspectorStatusText.Text = "Loading BMD...";
+        ModelPathText.Text = selected.BaseArmorModelPath;
+        InspectorStatusText.Text = "Building character...";
         InspectorStatusText.Foreground = ResourceBrush("Muted");
-        ViewportStatusText.Text = $"Loading {relativePath}";
+        ViewportStatusText.Text = $"Loading {selected.Name}";
         ViewportModelNameText.Text = selected.Name;
-        ViewportModelInfoText.Text = "Decoding mesh, skeleton and actions...";
-        ViewportModelDetailText.Text = relativePath;
+        ViewportModelInfoText.Text = "Loading base body, shared skeleton, animation bank and textures...";
+        ViewportModelDetailText.Text = "Player/ArmorClass + Helm/Pant/Glove/Boot + Player/player.bmd";
         ResetModelMetadata();
 
         if (PlayerModelVisual.Content is null)
@@ -215,50 +211,47 @@ public partial class MainWindow : Window
 
         try
         {
-            var baseBodyCount = selected.BaseBodyModelPaths.Count(path => File.Exists(ResolveDataPath(_workspace.DataRoot, path)));
-            var document = await _bmdReader.ReadAsync(fullPath, token);
+            var character = await _characterLoader.LoadBaseCharacterAsync(
+                _workspace.DataRoot,
+                selected,
+                token);
             token.ThrowIfCancellationRequested();
 
             var scene = await Task.Run(
-                () => _previewBuilder.Build(document, 0, 0, token),
+                () => _previewBuilder.Build(character, 0, 0, token),
                 token);
 
             token.ThrowIfCancellationRequested();
             if (revision != Volatile.Read(ref _playerRevision)) return;
 
-            _currentDocument = document;
-            _currentDefinition = selected;
-            ApplyBmdDocument(selected, document, scene, baseBodyCount);
+            _currentCharacter = character;
+            ApplyCharacter(selected, character, scene);
         }
         catch (OperationCanceledException)
         {
         }
-        catch (FileNotFoundException)
+        catch (FileNotFoundException ex)
         {
             if (revision != Volatile.Read(ref _playerRevision)) return;
-            SetPlayerLoadFailure(
-                "Base model missing",
-                $"Expected {relativePath}",
-                "The selected EX603 class model is not present in this Data folder.");
+            SetPlayerLoadFailure("Character asset missing", ex.Message, selected.BaseArmorModelPath);
         }
         catch (BmdFormatException ex)
         {
             if (revision != Volatile.Read(ref _playerRevision)) return;
-            SetPlayerLoadFailure("BMD decode failed", ex.Message, relativePath);
+            SetPlayerLoadFailure("BMD decode failed", ex.Message, selected.BaseArmorModelPath);
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or InvalidDataException or NotSupportedException)
         {
             if (revision != Volatile.Read(ref _playerRevision)) return;
-            SetPlayerLoadFailure("BMD render failed", ex.Message, relativePath);
+            SetPlayerLoadFailure("Character render failed", ex.Message, selected.BaseArmorModelPath);
         }
     }
 
     private async Task RenderCurrentActionAsync(int actionIndex)
     {
-        var document = _currentDocument;
-        var definition = _currentDefinition;
+        var character = _currentCharacter;
         var token = _playerLoadCts?.Token ?? CancellationToken.None;
-        if (document is null || definition is null || token.IsCancellationRequested)
+        if (character is null || token.IsCancellationRequested)
             return;
 
         var previewRevision = Interlocked.Increment(ref _previewRevision);
@@ -267,23 +260,23 @@ public partial class MainWindow : Window
         try
         {
             var scene = await Task.Run(
-                () => _previewBuilder.Build(document, actionIndex, 0, token),
+                () => _previewBuilder.Build(character, actionIndex, 0, token),
                 token);
 
             token.ThrowIfCancellationRequested();
             if (previewRevision != Volatile.Read(ref _previewRevision)) return;
-            if (!ReferenceEquals(document, _currentDocument)) return;
+            if (!ReferenceEquals(character, _currentCharacter)) return;
 
             PlayerModelVisual.Content = scene.Model;
             ViewportPlaceholder.Visibility = Visibility.Collapsed;
             FrameCamera(scene.Bounds);
-            ViewportStatusText.Text = $"Action {actionIndex:D3} • frame 0 • {scene.RenderedTriangles:N0} triangles";
-            AnimationSummaryText.Text = $"Action {actionIndex:D3} • {PlayerProfile.AnimationFps} FPS source";
+            ViewportStatusText.Text = $"Action {actionIndex:D3} • {scene.RenderedParts} body parts • {scene.RenderedTriangles:N0} triangles";
+            AnimationSummaryText.Text = $"Action {actionIndex:D3} • Player/player.bmd • {PlayerProfile.AnimationFps} FPS";
         }
         catch (OperationCanceledException)
         {
         }
-        catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
+        catch (Exception ex) when (ex is InvalidOperationException or ArgumentException or IOException)
         {
             InspectorStatusText.Text = "Action preview failed";
             InspectorStatusText.Foreground = ResourceBrush("Gold");
@@ -291,36 +284,36 @@ public partial class MainWindow : Window
         }
     }
 
-    private void ApplyBmdDocument(
+    private void ApplyCharacter(
         PlayerClassDefinition selected,
-        BmdDocument document,
-        BmdStaticPreviewScene scene,
-        int baseBodyCount)
+        PlayerCharacterSource character,
+        BmdStaticPreviewScene scene)
     {
-        var displayName = string.IsNullOrWhiteSpace(document.Name) ? selected.Name : document.Name;
-        var encryption = document.IsEncrypted ? "encrypted" : "plain";
+        var skeleton = character.SkeletonDocument;
+        var encryption = skeleton.IsEncrypted ? "encrypted" : "plain";
 
         PlayerModelVisual.Content = scene.Model;
         ViewportPlaceholder.Visibility = Visibility.Collapsed;
         FrameCamera(scene.Bounds);
 
-        InspectorStatusText.Text = "BMD rendered";
+        InspectorStatusText.Text = "Character rendered";
         InspectorStatusText.Foreground = ResourceBrush("Green");
-        InspectorBmdVersionText.Text = $"{document.Version} ({encryption})";
-        InspectorMeshesText.Text = document.MeshCount.ToString("N0");
-        InspectorBonesText.Text = document.BoneCount.ToString("N0");
-        InspectorActionsText.Text = document.ActionCount.ToString("N0");
+        InspectorBmdVersionText.Text = $"{skeleton.Version} ({encryption})";
+        InspectorMeshesText.Text = character.MeshCount.ToString("N0");
+        InspectorBonesText.Text = character.BoneCount.ToString("N0");
+        InspectorActionsText.Text = character.ActionCount.ToString("N0");
 
-        ViewportStatusText.Text = $"Rendered {scene.RenderedTriangles:N0} triangles";
-        ViewportModelNameText.Text = displayName;
-        ViewportModelInfoText.Text = $"{document.MeshCount:N0} meshes  •  {document.BoneCount:N0} bones  •  {document.ActionCount:N0} actions";
-        ViewportModelDetailText.Text = $"Base body assets {baseBodyCount}/5  •  BMD v{document.Version} {encryption}";
+        ViewportStatusText.Text = $"Character ready • {scene.RenderedParts}/5 body parts • {scene.RenderedTriangles:N0} triangles";
+        ViewportModelNameText.Text = selected.Name;
+        ViewportModelInfoText.Text = $"{scene.RenderedParts}/5 body parts  •  {character.MeshCount:N0} meshes  •  {character.BoneCount:N0} bones";
+        ViewportModelDetailText.Text = $"Textures {scene.LoadedTextures}/{character.TextureCount}  •  Player actions {character.ActionCount:N0}  •  diagnostics {character.Diagnostics.Count}";
 
-        ModelSummaryText.Text = $"{displayName} • BMD v{document.Version}";
-        SkeletonSummaryText.Text = $"{document.BoneCount:N0} bones • attach 33 / 42 / 47";
-        AnimationSummaryText.Text = $"{document.ActionCount:N0} actions • {PlayerProfile.AnimationFps} FPS";
+        ModelSummaryText.Text = $"{selected.Name} • {scene.RenderedParts}/5 body parts • {scene.LoadedTextures}/{character.TextureCount} textures";
+        ModelPathText.Text = "Player/ArmorClass + Helm/Pant/Glove/Boot";
+        SkeletonSummaryText.Text = $"{character.BoneCount:N0} bones • shared body skeleton • attach 33 / 42 / 47";
+        AnimationSummaryText.Text = $"{character.ActionCount:N0} actions • Player/player.bmd • {PlayerProfile.AnimationFps} FPS";
 
-        var actions = Enumerable.Range(0, document.ActionCount)
+        var actions = Enumerable.Range(0, character.ActionCount)
             .Select(index => $"Action {index:D3}")
             .ToArray();
 
@@ -336,8 +329,8 @@ public partial class MainWindow : Window
             _suppressAnimationSelection = false;
         }
 
-        FooterStateText.Text = $"{_workspace!.FileCount:N0} FILES  •  BMD V{document.Version}";
-        FooterStateText.Foreground = ResourceBrush("Green");
+        FooterStateText.Text = $"CHARACTER READY  •  {scene.RenderedParts}/5 PARTS  •  {scene.LoadedTextures}/{character.TextureCount} TEX";
+        FooterStateText.Foreground = ResourceBrush(character.Diagnostics.Count == 0 ? "Green" : "Gold");
     }
 
     private void FrameCamera(Rect3D bounds)
@@ -447,12 +440,6 @@ public partial class MainWindow : Window
         _playerLoadCts?.Cancel();
         _playerLoadCts?.Dispose();
         _playerLoadCts = new CancellationTokenSource();
-    }
-
-    private static string ResolveDataPath(string dataRoot, string relativePath)
-    {
-        var systemRelative = relativePath.Replace('/', Path.DirectorySeparatorChar).Replace('\\', Path.DirectorySeparatorChar);
-        return Path.Combine(dataRoot, systemRelative);
     }
 
     private Brush ResourceBrush(string key) => (Brush)FindResource(key);
