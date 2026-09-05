@@ -5,4 +5,7 @@
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
   </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\MUClientStudio.Models\MUClientStudio.Models.csproj" />
+  </ItemGroup>
 </Project>
