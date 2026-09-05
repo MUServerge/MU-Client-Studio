@@ -1,22 +1,34 @@
 using System.IO;
 using System.Windows;
+using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Media3D;
 using Microsoft.Win32;
 using MUClientStudio.Core.Formats.Bmd;
 using MUClientStudio.Core.Player;
 using MUClientStudio.Core.Workspace;
+using MUClientStudio.Models.Formats.Bmd;
 using MUClientStudio.Models.Player;
+using MUClientStudio.Rendering.Player;
 
 namespace MUClientStudio.App;
 
 public partial class MainWindow : Window
 {
     private readonly ClientWorkspaceService _workspaceService = new();
-    private readonly BmdProbeReader _bmdReader = new();
+    private readonly BmdReader _bmdReader = new();
+    private readonly BmdStaticPreviewBuilder _previewBuilder = new();
+
     private ClientWorkspace? _workspace;
+    private BmdDocument? _currentDocument;
+    private PlayerClassDefinition? _currentDefinition;
     private CancellationTokenSource? _workspaceLoadCts;
     private CancellationTokenSource? _playerLoadCts;
     private long _playerRevision;
+    private long _previewRevision;
+    private bool _suppressAnimationSelection;
+    private Point3D _cameraTarget = new(0, 0, 0);
+    private double _cameraDistance = 320;
 
     public MainWindow()
     {
@@ -79,6 +91,32 @@ public partial class MainWindow : Window
 
         if (_workspace is not null)
             await LoadSelectedPlayerModelAsync(selected);
+    }
+
+    private async void AnimationCombo_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+    {
+        if (_suppressAnimationSelection || AnimationCombo.SelectedIndex < 0 || _currentDocument is null)
+            return;
+
+        await RenderCurrentActionAsync(AnimationCombo.SelectedIndex);
+    }
+
+    private void PlayerViewport_MouseWheel(object sender, MouseWheelEventArgs e)
+    {
+        if (PlayerModelVisual.Content is null)
+            return;
+
+        var factor = e.Delta > 0 ? 0.88 : 1.14;
+        _cameraDistance = Math.Clamp(_cameraDistance * factor, 0.25, 100000);
+
+        var fromTarget = PlayerCamera.Position - _cameraTarget;
+        if (fromTarget.LengthSquared < 0.000001)
+            fromTarget = new Vector3D(0, 0, 1);
+        fromTarget.Normalize();
+
+        PlayerCamera.Position = _cameraTarget + (fromTarget * _cameraDistance);
+        PlayerCamera.LookDirection = _cameraTarget - PlayerCamera.Position;
+        e.Handled = true;
     }
 
     private async Task TryRestoreWorkspaceAsync()
@@ -158,6 +196,7 @@ public partial class MainWindow : Window
         ReplacePlayerCancellation();
         var token = _playerLoadCts!.Token;
         var revision = Interlocked.Increment(ref _playerRevision);
+        Interlocked.Increment(ref _previewRevision);
         var relativePath = selected.BaseArmorModelPath;
         var fullPath = ResolveDataPath(_workspace.DataRoot, relativePath);
 
@@ -167,18 +206,29 @@ public partial class MainWindow : Window
         InspectorStatusText.Foreground = ResourceBrush("Muted");
         ViewportStatusText.Text = $"Loading {relativePath}";
         ViewportModelNameText.Text = selected.Name;
-        ViewportModelInfoText.Text = "Reading real client model data...";
+        ViewportModelInfoText.Text = "Decoding mesh, skeleton and actions...";
         ViewportModelDetailText.Text = relativePath;
         ResetModelMetadata();
+
+        if (PlayerModelVisual.Content is null)
+            ViewportPlaceholder.Visibility = Visibility.Visible;
 
         try
         {
             var baseBodyCount = selected.BaseBodyModelPaths.Count(path => File.Exists(ResolveDataPath(_workspace.DataRoot, path)));
-            var info = await _bmdReader.ReadAsync(fullPath, token);
+            var document = await _bmdReader.ReadAsync(fullPath, token);
+            token.ThrowIfCancellationRequested();
+
+            var scene = await Task.Run(
+                () => _previewBuilder.Build(document, 0, 0, token),
+                token);
+
             token.ThrowIfCancellationRequested();
             if (revision != Volatile.Read(ref _playerRevision)) return;
 
-            ApplyBmdInfo(selected, info, baseBodyCount);
+            _currentDocument = document;
+            _currentDefinition = selected;
+            ApplyBmdDocument(selected, document, scene, baseBodyCount);
         }
         catch (OperationCanceledException)
         {
@@ -196,43 +246,127 @@ public partial class MainWindow : Window
             if (revision != Volatile.Read(ref _playerRevision)) return;
             SetPlayerLoadFailure("BMD decode failed", ex.Message, relativePath);
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
         {
             if (revision != Volatile.Read(ref _playerRevision)) return;
-            SetPlayerLoadFailure("BMD read failed", ex.Message, relativePath);
+            SetPlayerLoadFailure("BMD render failed", ex.Message, relativePath);
         }
     }
 
-    private void ApplyBmdInfo(PlayerClassDefinition selected, BmdModelInfo info, int baseBodyCount)
+    private async Task RenderCurrentActionAsync(int actionIndex)
     {
-        var displayName = string.IsNullOrWhiteSpace(info.Name) ? selected.Name : info.Name;
-        var encryption = info.IsEncrypted ? "encrypted" : "plain";
+        var document = _currentDocument;
+        var definition = _currentDefinition;
+        var token = _playerLoadCts?.Token ?? CancellationToken.None;
+        if (document is null || definition is null || token.IsCancellationRequested)
+            return;
 
-        InspectorStatusText.Text = "BMD loaded";
+        var previewRevision = Interlocked.Increment(ref _previewRevision);
+        ViewportStatusText.Text = $"Preparing Action {actionIndex:D3}";
+
+        try
+        {
+            var scene = await Task.Run(
+                () => _previewBuilder.Build(document, actionIndex, 0, token),
+                token);
+
+            token.ThrowIfCancellationRequested();
+            if (previewRevision != Volatile.Read(ref _previewRevision)) return;
+            if (!ReferenceEquals(document, _currentDocument)) return;
+
+            PlayerModelVisual.Content = scene.Model;
+            ViewportPlaceholder.Visibility = Visibility.Collapsed;
+            FrameCamera(scene.Bounds);
+            ViewportStatusText.Text = $"Action {actionIndex:D3} • frame 0 • {scene.RenderedTriangles:N0} triangles";
+            AnimationSummaryText.Text = $"Action {actionIndex:D3} • {PlayerProfile.AnimationFps} FPS source";
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
+        {
+            InspectorStatusText.Text = "Action preview failed";
+            InspectorStatusText.Foreground = ResourceBrush("Gold");
+            ViewportStatusText.Text = ex.Message;
+        }
+    }
+
+    private void ApplyBmdDocument(
+        PlayerClassDefinition selected,
+        BmdDocument document,
+        BmdStaticPreviewScene scene,
+        int baseBodyCount)
+    {
+        var displayName = string.IsNullOrWhiteSpace(document.Name) ? selected.Name : document.Name;
+        var encryption = document.IsEncrypted ? "encrypted" : "plain";
+
+        PlayerModelVisual.Content = scene.Model;
+        ViewportPlaceholder.Visibility = Visibility.Collapsed;
+        FrameCamera(scene.Bounds);
+
+        InspectorStatusText.Text = "BMD rendered";
         InspectorStatusText.Foreground = ResourceBrush("Green");
-        InspectorBmdVersionText.Text = $"{info.Version} ({encryption})";
-        InspectorMeshesText.Text = info.MeshCount.ToString("N0");
-        InspectorBonesText.Text = info.BoneCount.ToString("N0");
-        InspectorActionsText.Text = info.ActionCount.ToString("N0");
+        InspectorBmdVersionText.Text = $"{document.Version} ({encryption})";
+        InspectorMeshesText.Text = document.MeshCount.ToString("N0");
+        InspectorBonesText.Text = document.BoneCount.ToString("N0");
+        InspectorActionsText.Text = document.ActionCount.ToString("N0");
 
-        ViewportStatusText.Text = $"Loaded {selected.BaseArmorModelPath}";
+        ViewportStatusText.Text = $"Rendered {scene.RenderedTriangles:N0} triangles";
         ViewportModelNameText.Text = displayName;
-        ViewportModelInfoText.Text = $"{info.MeshCount:N0} meshes  •  {info.BoneCount:N0} bones  •  {info.ActionCount:N0} actions";
-        ViewportModelDetailText.Text = $"Base body assets {baseBodyCount}/5  •  BMD v{info.Version} {encryption}";
+        ViewportModelInfoText.Text = $"{document.MeshCount:N0} meshes  •  {document.BoneCount:N0} bones  •  {document.ActionCount:N0} actions";
+        ViewportModelDetailText.Text = $"Base body assets {baseBodyCount}/5  •  BMD v{document.Version} {encryption}";
 
-        ModelSummaryText.Text = $"{displayName} • BMD v{info.Version}";
-        SkeletonSummaryText.Text = $"{info.BoneCount:N0} bones • attach 33 / 42 / 47";
-        AnimationSummaryText.Text = $"{info.ActionCount:N0} actions • {PlayerProfile.AnimationFps} FPS";
+        ModelSummaryText.Text = $"{displayName} • BMD v{document.Version}";
+        SkeletonSummaryText.Text = $"{document.BoneCount:N0} bones • attach 33 / 42 / 47";
+        AnimationSummaryText.Text = $"{document.ActionCount:N0} actions • {PlayerProfile.AnimationFps} FPS";
 
-        var actions = Enumerable.Range(0, info.ActionCount)
+        var actions = Enumerable.Range(0, document.ActionCount)
             .Select(index => $"Action {index:D3}")
             .ToArray();
-        AnimationCombo.ItemsSource = actions;
-        AnimationCombo.IsEnabled = actions.Length > 0;
-        AnimationCombo.SelectedIndex = actions.Length > 0 ? 0 : -1;
 
-        FooterStateText.Text = $"{_workspace!.FileCount:N0} FILES  •  BMD V{info.Version}";
+        _suppressAnimationSelection = true;
+        try
+        {
+            AnimationCombo.ItemsSource = actions;
+            AnimationCombo.IsEnabled = actions.Length > 0;
+            AnimationCombo.SelectedIndex = actions.Length > 0 ? 0 : -1;
+        }
+        finally
+        {
+            _suppressAnimationSelection = false;
+        }
+
+        FooterStateText.Text = $"{_workspace!.FileCount:N0} FILES  •  BMD V{document.Version}";
         FooterStateText.Foreground = ResourceBrush("Green");
+    }
+
+    private void FrameCamera(Rect3D bounds)
+    {
+        if (bounds.IsEmpty ||
+            !double.IsFinite(bounds.X) || !double.IsFinite(bounds.Y) || !double.IsFinite(bounds.Z) ||
+            !double.IsFinite(bounds.SizeX) || !double.IsFinite(bounds.SizeY) || !double.IsFinite(bounds.SizeZ))
+            return;
+
+        var maxDimension = Math.Max(bounds.SizeX, Math.Max(bounds.SizeY, bounds.SizeZ));
+        if (maxDimension <= 0.0001)
+            maxDimension = 1;
+
+        _cameraTarget = new Point3D(
+            bounds.X + (bounds.SizeX * 0.5),
+            bounds.Y + (bounds.SizeY * 0.5),
+            bounds.Z + (bounds.SizeZ * 0.5));
+
+        var halfFovRadians = PlayerCamera.FieldOfView * Math.PI / 360.0;
+        _cameraDistance = Math.Max(maxDimension / (2.0 * Math.Tan(halfFovRadians)) * 1.35, maxDimension * 1.25);
+
+        PlayerCamera.Position = new Point3D(
+            _cameraTarget.X,
+            _cameraTarget.Y + (bounds.SizeY * 0.04),
+            _cameraTarget.Z + _cameraDistance);
+        PlayerCamera.LookDirection = _cameraTarget - PlayerCamera.Position;
+        PlayerCamera.UpDirection = new Vector3D(0, 1, 0);
+        PlayerCamera.NearPlaneDistance = Math.Max(0.01, _cameraDistance / 10000.0);
+        PlayerCamera.FarPlaneDistance = Math.Max(1000, _cameraDistance * 20.0);
     }
 
     private void SetPlayerLoadFailure(string status, string primary, string detail)
@@ -240,16 +374,30 @@ public partial class MainWindow : Window
         InspectorStatusText.Text = status;
         InspectorStatusText.Foreground = ResourceBrush("Gold");
         ViewportStatusText.Text = status;
-        ViewportModelNameText.Text = "PLAYER";
-        ViewportModelInfoText.Text = primary;
-        ViewportModelDetailText.Text = detail;
         ModelSummaryText.Text = status;
         SkeletonSummaryText.Text = "—";
         AnimationSummaryText.Text = "—";
         ResetModelMetadata();
-        AnimationCombo.ItemsSource = Array.Empty<string>();
-        AnimationCombo.IsEnabled = false;
-        AnimationCombo.SelectedIndex = -1;
+
+        _suppressAnimationSelection = true;
+        try
+        {
+            AnimationCombo.ItemsSource = Array.Empty<string>();
+            AnimationCombo.IsEnabled = false;
+            AnimationCombo.SelectedIndex = -1;
+        }
+        finally
+        {
+            _suppressAnimationSelection = false;
+        }
+
+        if (PlayerModelVisual.Content is null)
+        {
+            ViewportPlaceholder.Visibility = Visibility.Visible;
+            ViewportModelNameText.Text = "PLAYER";
+            ViewportModelInfoText.Text = primary;
+            ViewportModelDetailText.Text = detail;
+        }
     }
 
     private void ResetModelMetadata()
