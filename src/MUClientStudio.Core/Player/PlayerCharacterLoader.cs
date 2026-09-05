@@ -45,8 +45,7 @@ public sealed class PlayerCharacterLoader
 
         var diagnostics = new List<string>();
 
-        // ArmorClass is always the authoritative body skeleton, even when an armor item replaces
-        // the visible torso. This mirrors the reference character assembly pipeline.
+        // ArmorClass stays authoritative for body bone identity even when visible armor replaces it.
         var baseArmorFullPath = ResolveDataPath(dataRoot, definition.BaseArmorModelPath);
         if (!File.Exists(baseArmorFullPath))
         {
@@ -166,11 +165,44 @@ public sealed class PlayerCharacterLoader
             animationDocument = skeletonDocument;
         }
 
+        var attachments = new List<PlayerAttachmentSource>(3);
+        await TryLoadAttachmentAsync(
+            dataRoot,
+            definition,
+            "Left Weapon",
+            loadout.LeftWeapon,
+            item => item.Group is >= 0 and <= 6,
+            PlayerProfile.LeftWeaponBone,
+            attachments,
+            diagnostics,
+            cancellationToken).ConfigureAwait(false);
+        await TryLoadAttachmentAsync(
+            dataRoot,
+            definition,
+            "Right Weapon",
+            loadout.RightWeapon,
+            item => item.Group is >= 0 and <= 6,
+            PlayerProfile.RightWeaponBone,
+            attachments,
+            diagnostics,
+            cancellationToken).ConfigureAwait(false);
+        await TryLoadAttachmentAsync(
+            dataRoot,
+            definition,
+            "Wings",
+            loadout.Wings,
+            item => item.Group == 12,
+            PlayerProfile.WingBone,
+            attachments,
+            diagnostics,
+            cancellationToken).ConfigureAwait(false);
+
         return new PlayerCharacterSource(
             definition,
             skeletonDocument,
             animationDocument,
             bodyParts,
+            attachments,
             loadout,
             diagnostics);
     }
@@ -195,6 +227,56 @@ public sealed class PlayerCharacterLoader
             cancellationToken).ConfigureAwait(false);
 
         return new PlayerBodyPartSource(slot, relativePath, document, textures, equipmentItem);
+    }
+
+    private async Task TryLoadAttachmentAsync(
+        string dataRoot,
+        PlayerClassDefinition definition,
+        string slot,
+        ItemDefinition? item,
+        Func<ItemDefinition, bool> isValid,
+        int attachBoneIndex,
+        List<PlayerAttachmentSource> attachments,
+        List<string> diagnostics,
+        CancellationToken cancellationToken)
+    {
+        if (item is null) return;
+        if (!isValid(item))
+        {
+            diagnostics.Add($"Ignored {slot} item {item.Key}: item group does not match the slot.");
+            return;
+        }
+
+        var resolved = ResolveAttachmentPath(dataRoot, item);
+        if (resolved is null)
+        {
+            diagnostics.Add($"Attachment model missing for {slot}: {item.DisplayName} ({item.ModelPath}).");
+            return;
+        }
+
+        try
+        {
+            var document = await _bmdReader.ReadAsync(resolved.Value.FullPath, cancellationToken).ConfigureAwait(false);
+            var textures = await LoadTexturesAsync(
+                dataRoot,
+                definition,
+                document,
+                resolved.Value.RelativePath,
+                diagnostics,
+                cancellationToken).ConfigureAwait(false);
+
+            attachments.Add(new PlayerAttachmentSource(
+                slot,
+                resolved.Value.RelativePath,
+                document,
+                textures,
+                item,
+                attachBoneIndex));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
+        {
+            diagnostics.Add($"Failed to load {slot} {item.DisplayName}: {ex.Message}");
+        }
     }
 
     private async Task<IReadOnlyList<MuTextureAsset?>> LoadTexturesAsync(
@@ -245,6 +327,35 @@ public sealed class PlayerCharacterLoader
             candidates.Add("Player/" + normalized[5..]);
 
         candidates.Add(normalized);
+
+        foreach (var relative in candidates.Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            var full = ResolveDataPath(dataRoot, relative);
+            if (File.Exists(full))
+                return (relative, full);
+        }
+
+        return null;
+    }
+
+    private static (string RelativePath, string FullPath)? ResolveAttachmentPath(
+        string dataRoot,
+        ItemDefinition item)
+    {
+        var normalized = NormalizeRelativePath(item.ModelPath);
+        if (string.IsNullOrWhiteSpace(normalized)) return null;
+        normalized = EnsureBmdExtension(normalized);
+
+        var candidates = new List<string> { normalized };
+        if (normalized.StartsWith("Item/", StringComparison.OrdinalIgnoreCase))
+            candidates.Add("Player/" + normalized[5..]);
+        else if (normalized.StartsWith("Player/", StringComparison.OrdinalIgnoreCase))
+            candidates.Add("Item/" + normalized[7..]);
+        else
+        {
+            candidates.Add("Item/" + normalized);
+            candidates.Add("Player/" + normalized);
+        }
 
         foreach (var relative in candidates.Distinct(StringComparer.OrdinalIgnoreCase))
         {
