@@ -11,6 +11,9 @@
     <ApplicationIcon />
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="OpenTK.GLWpfControl" Version="4.3.6" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="..\MUClientStudio.Core\MUClientStudio.Core.csproj" />
     <ProjectReference Include="..\MUClientStudio.Models\MUClientStudio.Models.csproj" />
     <ProjectReference Include="..\MUClientStudio.Rendering\MUClientStudio.Rendering.csproj" />
