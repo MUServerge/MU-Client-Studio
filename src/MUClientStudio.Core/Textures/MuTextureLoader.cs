@@ -5,6 +5,12 @@ using MUClientStudio.Models.Textures;
 
 namespace MUClientStudio.Core.Textures;
 
+public enum MuTextureDecodeProfile
+{
+    PlayerCompatibility,
+    Strict
+}
+
 public sealed class MuTextureLoader
 {
     private static readonly string[] SupportedExtensions =
@@ -21,7 +27,8 @@ public sealed class MuTextureLoader
         BmdDocument document,
         string textureReference,
         int classModelId,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        MuTextureDecodeProfile profile = MuTextureDecodeProfile.PlayerCompatibility)
     {
         if (string.IsNullOrWhiteSpace(textureReference))
             return null;
@@ -36,7 +43,7 @@ public sealed class MuTextureLoader
 
             try
             {
-                return await LoadAsync(candidate, cancellationToken).ConfigureAwait(false);
+                return await LoadAsync(candidate, cancellationToken, profile).ConfigureAwait(false);
             }
             catch (InvalidDataException ex)
             {
@@ -56,7 +63,7 @@ public sealed class MuTextureLoader
             cancellationToken.ThrowIfCancellationRequested();
             try
             {
-                return await LoadAsync(candidate, cancellationToken).ConfigureAwait(false);
+                return await LoadAsync(candidate, cancellationToken, profile).ConfigureAwait(false);
             }
             catch (InvalidDataException ex)
             {
@@ -74,7 +81,10 @@ public sealed class MuTextureLoader
         return null;
     }
 
-    public async Task<MuTextureAsset> LoadAsync(string path, CancellationToken cancellationToken = default)
+    public async Task<MuTextureAsset> LoadAsync(
+        string path,
+        CancellationToken cancellationToken = default,
+        MuTextureDecodeProfile profile = MuTextureDecodeProfile.Strict)
     {
         var bytes = await File.ReadAllBytesAsync(path, cancellationToken).ConfigureAwait(false);
         cancellationToken.ThrowIfCancellationRequested();
@@ -82,8 +92,8 @@ public sealed class MuTextureLoader
         var extension = Path.GetExtension(path).ToLowerInvariant();
         return extension switch
         {
-            ".ozj" => DecodeOzj(path, bytes),
-            ".ozt" => DecodeOzt(path, bytes),
+            ".ozj" => DecodeOzj(path, bytes, profile),
+            ".ozt" => DecodeOzt(path, bytes, profile),
             ".tga" => DecodeTga(path, bytes),
             ".jpg" or ".jpeg" or ".png" or ".bmp" =>
                 new MuTextureAsset(path, MuTexturePayloadKind.EncodedImage, bytes),
@@ -311,30 +321,53 @@ public sealed class MuTextureLoader
         return $"{match.Groups["prefix"].Value}{preferred}{extension}";
     }
 
-    private static MuTextureAsset DecodeOzj(string path, byte[] bytes)
+    private static MuTextureAsset DecodeOzj(
+        string path,
+        byte[] bytes,
+        MuTextureDecodeProfile profile)
     {
         if (bytes.Length < 20)
             throw new InvalidDataException("OZJ file is too small.");
 
-        var jpegOffset = -1;
-        for (var i = 16; i <= bytes.Length - 3; i++)
-        {
-            if (bytes[i] == 0xFF && bytes[i + 1] == 0xD8 && bytes[i + 2] == 0xFF)
-            {
-                jpegOffset = i;
-                break;
-            }
-        }
+        var jpegOffset = profile == MuTextureDecodeProfile.PlayerCompatibility
+            ? FindJpegMarker(bytes, 20, Math.Min(30, bytes.Length - 2))
+            : FindJpegMarker(bytes, 16, bytes.Length - 2);
+
+        // Some custom clients keep the JPEG marker outside the original narrow legacy window.
+        // Preserve exact Player behavior first, then accept the verified strict scan as fallback.
+        if (jpegOffset < 0 && profile == MuTextureDecodeProfile.PlayerCompatibility)
+            jpegOffset = FindJpegMarker(bytes, 16, bytes.Length - 2);
 
         if (jpegOffset < 0)
             throw new InvalidDataException("Invalid OZJ: JPEG marker not found.");
 
         var payload = bytes[jpegOffset..];
-        var isTopDown = bytes[17] != 0;
-        return new MuTextureAsset(path, MuTexturePayloadKind.EncodedImage, payload, FlipVertical: !isTopDown);
+        var flipVertical = profile == MuTextureDecodeProfile.Strict && bytes[17] == 0;
+        return new MuTextureAsset(
+            path,
+            MuTexturePayloadKind.EncodedImage,
+            payload,
+            FlipVertical: flipVertical);
     }
 
-    private static MuTextureAsset DecodeOzt(string path, byte[] bytes)
+    private static int FindJpegMarker(byte[] bytes, int fromInclusive, int toExclusive)
+    {
+        var from = Math.Clamp(fromInclusive, 0, Math.Max(0, bytes.Length - 3));
+        var to = Math.Clamp(toExclusive, from, Math.Max(from, bytes.Length - 2));
+
+        for (var i = from; i < to; i++)
+        {
+            if (bytes[i] == 0xFF && bytes[i + 1] == 0xD8 && bytes[i + 2] == 0xFF)
+                return i;
+        }
+
+        return -1;
+    }
+
+    private static MuTextureAsset DecodeOzt(
+        string path,
+        byte[] bytes,
+        MuTextureDecodeProfile profile)
     {
         if (bytes.Length < 22)
             throw new InvalidDataException("OZT file is too small.");
@@ -349,8 +382,11 @@ public sealed class MuTextureLoader
         if (22 + sourceBytes > bytes.Length)
             throw new InvalidDataException("Truncated OZT pixel data.");
 
-        var width = NextPowerOfTwo(sourceWidth);
-        var height = NextPowerOfTwo(sourceHeight);
+        // The Player/model path historically uses the source dimensions. Expanding to POT here
+        // changes the UV sampling domain and visibly shifts body/set textures. Keep POT expansion
+        // only for callers that explicitly request the strict/reference image-converter profile.
+        var width = profile == MuTextureDecodeProfile.Strict ? NextPowerOfTwo(sourceWidth) : sourceWidth;
+        var height = profile == MuTextureDecodeProfile.Strict ? NextPowerOfTwo(sourceHeight) : sourceHeight;
         var output = new byte[checked(width * height * 4)];
         var sourceOffset = 22;
 
