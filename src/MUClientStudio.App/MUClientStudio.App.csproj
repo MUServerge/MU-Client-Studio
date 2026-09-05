@@ -13,5 +13,6 @@
   <ItemGroup>
     <ProjectReference Include="..\MUClientStudio.Core\MUClientStudio.Core.csproj" />
     <ProjectReference Include="..\MUClientStudio.Models\MUClientStudio.Models.csproj" />
+    <ProjectReference Include="..\MUClientStudio.Rendering\MUClientStudio.Rendering.csproj" />
   </ItemGroup>
 </Project>
