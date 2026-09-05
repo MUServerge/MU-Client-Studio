@@ -69,7 +69,7 @@
                         </StackPanel>
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
                             <ComboBox x:Name="ClassCombo" Width="150" Height="30" Style="{StaticResource V6ComboBox}" SelectionChanged="ClassCombo_SelectionChanged"/>
-                            <ComboBox x:Name="AnimationCombo" Width="150" Height="30" Margin="8,0,0,0" Style="{StaticResource V6ComboBox}"/>
+                            <ComboBox x:Name="AnimationCombo" Width="150" Height="30" Margin="8,0,0,0" Style="{StaticResource V6ComboBox}" IsEnabled="False"/>
                         </StackPanel>
                     </Grid>
                 </Border>
@@ -85,11 +85,11 @@
                                     <TextBlock x:Name="ViewportStatusText" Text="Waiting for client Data" Foreground="#718095" FontSize="9" HorizontalAlignment="Right" VerticalAlignment="Center"/>
                                 </Grid>
                             </Border>
-                            <Border Grid.Row="1" Width="220" Height="320" HorizontalAlignment="Center" VerticalAlignment="Center" BorderBrush="#24364A" BorderThickness="1" CornerRadius="14" Background="#0A1119">
-                                <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
-                                    <TextBlock Text="PLAYER" Foreground="#41546B" FontSize="34" FontWeight="Bold" HorizontalAlignment="Center"/>
-                                    <TextBlock Text="BMD renderer stage" Foreground="#65768B" FontSize="10" Margin="0,8,0,0" HorizontalAlignment="Center"/>
-                                    <TextBlock Text="Xulek-first pipeline" Foreground="#43576D" FontSize="8" Margin="0,4,0,0" HorizontalAlignment="Center"/>
+                            <Border Grid.Row="1" Width="260" Height="320" HorizontalAlignment="Center" VerticalAlignment="Center" BorderBrush="#24364A" BorderThickness="1" CornerRadius="14" Background="#0A1119">
+                                <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Margin="18">
+                                    <TextBlock x:Name="ViewportModelNameText" Text="PLAYER" Foreground="#41546B" FontSize="30" FontWeight="Bold" HorizontalAlignment="Center" TextAlignment="Center"/>
+                                    <TextBlock x:Name="ViewportModelInfoText" Text="Waiting for a real BMD model" Foreground="#65768B" FontSize="10" Margin="0,10,0,0" HorizontalAlignment="Center" TextAlignment="Center"/>
+                                    <TextBlock x:Name="ViewportModelDetailText" Text="Main_EX603 → Xulek implementation reference" Foreground="#43576D" FontSize="8" Margin="0,5,0,0" HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap"/>
                                 </StackPanel>
                             </Border>
                         </Grid>
@@ -111,9 +111,9 @@
                 <Border Grid.Row="2" Margin="12,0,12,12" Background="#0B1118" BorderBrush="#263548" BorderThickness="1" CornerRadius="10">
                     <Grid Margin="14,10">
                         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0"><TextBlock Text="MODEL" Foreground="#637286" FontSize="8"/><TextBlock x:Name="ModelPathText" Text="—" FontSize="11" Margin="0,6,0,0"/></StackPanel>
-                        <StackPanel Grid.Column="1"><TextBlock Text="SKELETON" Foreground="#637286" FontSize="8"/><TextBlock Text="Bones 33 / 42 / 47 attachments" FontSize="11" Margin="0,6,0,0"/></StackPanel>
-                        <StackPanel Grid.Column="2"><TextBlock Text="ANIMATION" Foreground="#637286" FontSize="8"/><TextBlock Text="24 FPS source timing" FontSize="11" Margin="0,6,0,0"/></StackPanel>
+                        <StackPanel Grid.Column="0"><TextBlock Text="MODEL" Foreground="#637286" FontSize="8"/><TextBlock x:Name="ModelSummaryText" Text="—" FontSize="11" Margin="0,6,0,0"/><TextBlock x:Name="ModelPathText" Text="—" Foreground="#637286" FontSize="8" Margin="0,4,0,0" TextTrimming="CharacterEllipsis"/></StackPanel>
+                        <StackPanel Grid.Column="1"><TextBlock Text="SKELETON" Foreground="#637286" FontSize="8"/><TextBlock x:Name="SkeletonSummaryText" Text="Bones 33 / 42 / 47 attachments" FontSize="11" Margin="0,6,0,0"/></StackPanel>
+                        <StackPanel Grid.Column="2"><TextBlock Text="ANIMATION" Foreground="#637286" FontSize="8"/><TextBlock x:Name="AnimationSummaryText" Text="24 FPS source timing" FontSize="11" Margin="0,6,0,0"/></StackPanel>
                     </Grid>
                 </Border>
             </Grid>
@@ -124,18 +124,25 @@
                     <TextBlock Text="Player state" FontSize="12" FontWeight="SemiBold" Margin="0,7,0,14"/>
                     <Grid>
                         <Grid.ColumnDefinitions><ColumnDefinition Width="90"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                        <Grid.RowDefinitions><RowDefinition Height="28"/><RowDefinition Height="28"/><RowDefinition Height="28"/><RowDefinition Height="28"/><RowDefinition Height="28"/><RowDefinition Height="28"/></Grid.RowDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="28"/><RowDefinition Height="28"/><RowDefinition Height="28"/><RowDefinition Height="28"/>
+                            <RowDefinition Height="28"/><RowDefinition Height="28"/><RowDefinition Height="28"/><RowDefinition Height="28"/><RowDefinition Height="28"/>
+                        </Grid.RowDefinitions>
                         <TextBlock Grid.Row="0" Text="Status" Foreground="#65758A" FontSize="9"/><TextBlock Grid.Row="0" Grid.Column="1" x:Name="InspectorStatusText" Text="Waiting" FontSize="9" HorizontalAlignment="Right"/>
                         <TextBlock Grid.Row="1" Text="Class" Foreground="#65758A" FontSize="9"/><TextBlock Grid.Row="1" Grid.Column="1" x:Name="InspectorClassText" Text="Dark Wizard" FontSize="9" HorizontalAlignment="Right"/>
                         <TextBlock Grid.Row="2" Text="Data root" Foreground="#65758A" FontSize="9"/><TextBlock Grid.Row="2" Grid.Column="1" x:Name="InspectorDataText" Text="Not loaded" FontSize="9" HorizontalAlignment="Right" TextTrimming="CharacterEllipsis" Width="140"/>
                         <TextBlock Grid.Row="3" Text="Files" Foreground="#65758A" FontSize="9"/><TextBlock Grid.Row="3" Grid.Column="1" x:Name="InspectorFilesText" Text="—" FontSize="9" HorizontalAlignment="Right"/>
-                        <TextBlock Grid.Row="4" Text="Wing bone" Foreground="#65758A" FontSize="9"/><TextBlock Grid.Row="4" Grid.Column="1" Text="47" FontSize="9" HorizontalAlignment="Right"/>
-                        <TextBlock Grid.Row="5" Text="Weapon bones" Foreground="#65758A" FontSize="9"/><TextBlock Grid.Row="5" Grid.Column="1" Text="33 / 42" FontSize="9" HorizontalAlignment="Right"/>
+                        <TextBlock Grid.Row="4" Text="BMD version" Foreground="#65758A" FontSize="9"/><TextBlock Grid.Row="4" Grid.Column="1" x:Name="InspectorBmdVersionText" Text="—" FontSize="9" HorizontalAlignment="Right"/>
+                        <TextBlock Grid.Row="5" Text="Meshes" Foreground="#65758A" FontSize="9"/><TextBlock Grid.Row="5" Grid.Column="1" x:Name="InspectorMeshesText" Text="—" FontSize="9" HorizontalAlignment="Right"/>
+                        <TextBlock Grid.Row="6" Text="Bones" Foreground="#65758A" FontSize="9"/><TextBlock Grid.Row="6" Grid.Column="1" x:Name="InspectorBonesText" Text="—" FontSize="9" HorizontalAlignment="Right"/>
+                        <TextBlock Grid.Row="7" Text="Actions" Foreground="#65758A" FontSize="9"/><TextBlock Grid.Row="7" Grid.Column="1" x:Name="InspectorActionsText" Text="—" FontSize="9" HorizontalAlignment="Right"/>
+                        <TextBlock Grid.Row="8" Text="Attach bones" Foreground="#65758A" FontSize="9"/><TextBlock Grid.Row="8" Grid.Column="1" Text="33 / 42 / 47" FontSize="9" HorizontalAlignment="Right"/>
                     </Grid>
                     <Border Height="1" Background="#1F2A39" Margin="0,10,0,14"/>
                     <TextBlock Text="SOURCE CONTRACT" Foreground="#5F6E82" FontSize="8"/>
-                    <TextBlock Text="Xulek primary reference" FontSize="10" Margin="0,8,0,0"/>
-                    <TextBlock Text="Main_EX603 legacy validation" Foreground="#748397" FontSize="9" Margin="0,4,0,0"/>
+                    <TextBlock Text="Main_EX603 primary reference" FontSize="10" Margin="0,8,0,0"/>
+                    <TextBlock Text="Xulek BMD / rendering implementation" Foreground="#748397" FontSize="9" Margin="0,4,0,0"/>
+                    <TextBlock Text="Main5.2 cross-check only" Foreground="#748397" FontSize="9" Margin="0,4,0,0"/>
                     <TextBlock Text="No invented BMD semantics" Foreground="{StaticResource Green}" FontSize="9" Margin="0,4,0,0"/>
                 </StackPanel>
             </Border>
