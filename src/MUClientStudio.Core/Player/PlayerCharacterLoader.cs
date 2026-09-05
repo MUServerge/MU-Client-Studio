@@ -1,5 +1,6 @@
 using MUClientStudio.Core.Formats.Bmd;
 using MUClientStudio.Core.Textures;
+using MUClientStudio.Models.Formats.Bmd;
 using MUClientStudio.Models.Player;
 using MUClientStudio.Models.Textures;
 
@@ -68,7 +69,7 @@ public sealed class PlayerCharacterLoader
                     if (textures[meshIndex] is null && !string.IsNullOrWhiteSpace(textureReference))
                         diagnostics.Add($"Texture not found for {part.RelativePath}: {textureReference}");
                 }
-                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or OverflowException)
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or OverflowException)
                 {
                     diagnostics.Add($"Texture decode failed for {part.RelativePath} / {textureReference}: {ex.Message}");
                 }
