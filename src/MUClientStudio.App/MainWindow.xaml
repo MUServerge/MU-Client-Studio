@@ -69,14 +69,14 @@
                         </StackPanel>
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
                             <ComboBox x:Name="ClassCombo" Width="150" Height="30" Style="{StaticResource V6ComboBox}" SelectionChanged="ClassCombo_SelectionChanged"/>
-                            <ComboBox x:Name="AnimationCombo" Width="150" Height="30" Margin="8,0,0,0" Style="{StaticResource V6ComboBox}" IsEnabled="False"/>
+                            <ComboBox x:Name="AnimationCombo" Width="150" Height="30" Margin="8,0,0,0" Style="{StaticResource V6ComboBox}" IsEnabled="False" SelectionChanged="AnimationCombo_SelectionChanged"/>
                         </StackPanel>
                     </Grid>
                 </Border>
 
                 <Grid Grid.Row="1" Margin="12">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="300"/></Grid.ColumnDefinitions>
-                    <Border Grid.Column="0" Background="#080D13" BorderBrush="#263548" BorderThickness="1" CornerRadius="10" Margin="0,0,10,0">
+                    <Border Grid.Column="0" Background="#080D13" BorderBrush="#263548" BorderThickness="1" CornerRadius="10" Margin="0,0,10,0" ClipToBounds="True">
                         <Grid>
                             <Grid.RowDefinitions><RowDefinition Height="42"/><RowDefinition Height="*"/></Grid.RowDefinitions>
                             <Border Grid.Row="0" BorderBrush="#1F2A39" BorderThickness="0,0,0,1">
@@ -85,13 +85,42 @@
                                     <TextBlock x:Name="ViewportStatusText" Text="Waiting for client Data" Foreground="#718095" FontSize="9" HorizontalAlignment="Right" VerticalAlignment="Center"/>
                                 </Grid>
                             </Border>
-                            <Border Grid.Row="1" Width="260" Height="320" HorizontalAlignment="Center" VerticalAlignment="Center" BorderBrush="#24364A" BorderThickness="1" CornerRadius="14" Background="#0A1119">
-                                <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Margin="18">
-                                    <TextBlock x:Name="ViewportModelNameText" Text="PLAYER" Foreground="#41546B" FontSize="30" FontWeight="Bold" HorizontalAlignment="Center" TextAlignment="Center"/>
-                                    <TextBlock x:Name="ViewportModelInfoText" Text="Waiting for a real BMD model" Foreground="#65768B" FontSize="10" Margin="0,10,0,0" HorizontalAlignment="Center" TextAlignment="Center"/>
-                                    <TextBlock x:Name="ViewportModelDetailText" Text="Main_EX603 → Xulek implementation reference" Foreground="#43576D" FontSize="8" Margin="0,5,0,0" HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap"/>
-                                </StackPanel>
-                            </Border>
+
+                            <Grid Grid.Row="1" Background="#080D13">
+                                <Viewport3D x:Name="PlayerViewport" ClipToBounds="True" MouseWheel="PlayerViewport_MouseWheel">
+                                    <Viewport3D.Camera>
+                                        <PerspectiveCamera x:Name="PlayerCamera"
+                                                           Position="0,0,320"
+                                                           LookDirection="0,0,-320"
+                                                           UpDirection="0,1,0"
+                                                           FieldOfView="38"
+                                                           NearPlaneDistance="0.1"
+                                                           FarPlaneDistance="100000"/>
+                                    </Viewport3D.Camera>
+                                    <ModelVisual3D>
+                                        <ModelVisual3D.Content>
+                                            <Model3DGroup>
+                                                <AmbientLight Color="#777D86"/>
+                                                <DirectionalLight Color="#E8EDF4" Direction="-0.35,-0.45,-1"/>
+                                                <DirectionalLight Color="#66788F" Direction="0.8,0.15,0.45"/>
+                                            </Model3DGroup>
+                                        </ModelVisual3D.Content>
+                                    </ModelVisual3D>
+                                    <ModelVisual3D x:Name="PlayerModelVisual"/>
+                                </Viewport3D>
+
+                                <Border x:Name="ViewportPlaceholder"
+                                        Width="280" Height="320"
+                                        HorizontalAlignment="Center" VerticalAlignment="Center"
+                                        BorderBrush="#24364A" BorderThickness="1" CornerRadius="14"
+                                        Background="#0A1119">
+                                    <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Margin="18">
+                                        <TextBlock x:Name="ViewportModelNameText" Text="PLAYER" Foreground="#41546B" FontSize="30" FontWeight="Bold" HorizontalAlignment="Center" TextAlignment="Center"/>
+                                        <TextBlock x:Name="ViewportModelInfoText" Text="Waiting for a real BMD model" Foreground="#65768B" FontSize="10" Margin="0,10,0,0" HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap"/>
+                                        <TextBlock x:Name="ViewportModelDetailText" Text="Main_EX603 → Xulek implementation reference" Foreground="#43576D" FontSize="8" Margin="0,5,0,0" HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap"/>
+                                    </StackPanel>
+                                </Border>
+                            </Grid>
                         </Grid>
                     </Border>
                     <Border Grid.Column="1" Background="#0B1118" BorderBrush="#263548" BorderThickness="1" CornerRadius="10">
