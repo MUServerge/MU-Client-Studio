@@ -14,7 +14,11 @@ public sealed record BmdStaticPreviewScene(
 
 public sealed class BmdStaticPreviewBuilder
 {
-    public BmdStaticPreviewScene Build(BmdDocument document, int actionIndex = 0, int frameIndex = 0)
+    public BmdStaticPreviewScene Build(
+        BmdDocument document,
+        int actionIndex = 0,
+        int frameIndex = 0,
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(document);
 
@@ -25,6 +29,7 @@ public sealed class BmdStaticPreviewBuilder
 
         foreach (var mesh in document.Meshes)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var geometry = new MeshGeometry3D();
 
             foreach (var triangle in mesh.Triangles)
@@ -46,22 +51,40 @@ public sealed class BmdStaticPreviewBuilder
             if (geometry.Positions.Count == 0)
                 continue;
 
-            var brush = new SolidColorBrush(Color.FromRgb(168, 180, 194));
+            geometry.Freeze();
+
+            var diffuseBrush = new SolidColorBrush(Color.FromRgb(168, 180, 194));
+            diffuseBrush.Freeze();
+            var specularBrush = new SolidColorBrush(Color.FromRgb(90, 98, 108));
+            specularBrush.Freeze();
+
+            var diffuse = new DiffuseMaterial(diffuseBrush);
+            diffuse.Freeze();
+            var specular = new SpecularMaterial(specularBrush, 20);
+            specular.Freeze();
+
             var material = new MaterialGroup();
-            material.Children.Add(new DiffuseMaterial(brush));
-            material.Children.Add(new SpecularMaterial(new SolidColorBrush(Color.FromRgb(90, 98, 108)), 20));
+            material.Children.Add(diffuse);
+            material.Children.Add(specular);
+            material.Freeze();
 
             var geometryModel = new GeometryModel3D(geometry, material)
             {
                 BackMaterial = material
             };
+            geometryModel.Freeze();
             model.Children.Add(geometryModel);
         }
 
-        model.Transform = new RotateTransform3D(
+        var sceneTransform = new RotateTransform3D(
             new AxisAngleRotation3D(new Vector3D(1, 0, 0), -90));
+        sceneTransform.Freeze();
+        model.Transform = sceneTransform;
 
-        return new BmdStaticPreviewScene(model, model.Bounds, renderedTriangles, skippedTriangles);
+        var bounds = model.Bounds;
+        model.Freeze();
+
+        return new BmdStaticPreviewScene(model, bounds, renderedTriangles, skippedTriangles);
     }
 
     private static BonePose[] BuildPoses(BmdDocument document, int actionIndex, int frameIndex)
@@ -101,7 +124,7 @@ public sealed class BmdStaticPreviewBuilder
         int cornerB,
         int cornerC)
     {
-        var corners = stackalloc int[3] { cornerA, cornerB, cornerC };
+        Span<int> corners = stackalloc int[3] { cornerA, cornerB, cornerC };
         var pendingPositions = new Point3D[3];
         var pendingNormals = new Vector3D[3];
         var pendingUvs = new Point[3];
