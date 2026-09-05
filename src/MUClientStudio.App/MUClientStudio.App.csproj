@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <AssemblyName>MUClientStudio</AssemblyName>
+    <RootNamespace>MUClientStudio.App</RootNamespace>
+    <ApplicationIcon />
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\MUClientStudio.Core\MUClientStudio.Core.csproj" />
+    <ProjectReference Include="..\MUClientStudio.Models\MUClientStudio.Models.csproj" />
+  </ItemGroup>
+</Project>
