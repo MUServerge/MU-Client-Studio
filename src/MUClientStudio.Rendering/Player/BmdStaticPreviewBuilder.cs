@@ -18,7 +18,8 @@ public sealed record BmdStaticPreviewScene(
     int SkippedTriangles,
     int RenderedParts,
     int LoadedTextures,
-    int MissingTextures);
+    int MissingTextures,
+    int RenderedAttachments);
 
 public sealed class BmdStaticPreviewBuilder
 {
@@ -30,7 +31,7 @@ public sealed class BmdStaticPreviewBuilder
     {
         ArgumentNullException.ThrowIfNull(character);
 
-        var poses = BuildPoses(
+        var bodyPoses = BuildPoses(
             character.SkeletonDocument,
             character.AnimationDocument,
             actionIndex,
@@ -40,6 +41,7 @@ public sealed class BmdStaticPreviewBuilder
         var renderedTriangles = 0;
         var skippedTriangles = 0;
         var renderedParts = 0;
+        var renderedAttachments = 0;
         var loadedTextures = 0;
         var missingTextures = 0;
         var bitmapCache = new Dictionary<string, BitmapSource>(StringComparer.OrdinalIgnoreCase);
@@ -47,55 +49,48 @@ public sealed class BmdStaticPreviewBuilder
         foreach (var part in character.BodyParts)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var partRendered = false;
-
-            for (var meshIndex = 0; meshIndex < part.Document.Meshes.Count; meshIndex++)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                var mesh = part.Document.Meshes[meshIndex];
-                var geometry = new MeshGeometry3D();
-
-                foreach (var triangle in mesh.Triangles)
-                {
-                    if (TryAppendTriangle(mesh, triangle, poses, geometry, 0, 2, 1))
-                        renderedTriangles++;
-                    else
-                        skippedTriangles++;
-
-                    if (triangle.Polygon == 4)
-                    {
-                        if (TryAppendTriangle(mesh, triangle, poses, geometry, 0, 2, 3))
-                            renderedTriangles++;
-                        else
-                            skippedTriangles++;
-                    }
-                }
-
-                if (geometry.Positions.Count == 0)
-                    continue;
-
-                geometry.Freeze();
-
-                var texture = meshIndex < part.MeshTextures.Count
-                    ? part.MeshTextures[meshIndex]
-                    : null;
-                var material = BuildMaterial(texture, bitmapCache, out var hasTexture);
-                if (hasTexture)
-                    loadedTextures++;
-                else if (!string.IsNullOrWhiteSpace(mesh.TexturePath))
-                    missingTextures++;
-
-                var geometryModel = new GeometryModel3D(geometry, material)
-                {
-                    BackMaterial = material
-                };
-                geometryModel.Freeze();
-                model.Children.Add(geometryModel);
-                partRendered = true;
-            }
+            var partRendered = AppendDocument(
+                part.Document,
+                part.MeshTextures,
+                bodyPoses,
+                model,
+                bitmapCache,
+                ref renderedTriangles,
+                ref skippedTriangles,
+                ref loadedTextures,
+                ref missingTextures,
+                cancellationToken);
 
             if (partRendered)
                 renderedParts++;
+        }
+
+        foreach (var attachment in character.Attachments)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (attachment.AttachBoneIndex < 0 || attachment.AttachBoneIndex >= bodyPoses.Length)
+            {
+                skippedTriangles += attachment.Document.Meshes.Sum(mesh => mesh.Triangles.Count);
+                continue;
+            }
+
+            var attachmentPoses = BuildPoses(attachment.Document, attachment.Document, 0, 0);
+            var attachmentRendered = AppendDocument(
+                attachment.Document,
+                attachment.MeshTextures,
+                attachmentPoses,
+                model,
+                bitmapCache,
+                ref renderedTriangles,
+                ref skippedTriangles,
+                ref loadedTextures,
+                ref missingTextures,
+                cancellationToken,
+                bodyPoses,
+                attachment.AttachBoneIndex);
+
+            if (attachmentRendered)
+                renderedAttachments++;
         }
 
         var sceneTransform = new RotateTransform3D(
@@ -113,7 +108,70 @@ public sealed class BmdStaticPreviewBuilder
             skippedTriangles,
             renderedParts,
             loadedTextures,
-            missingTextures);
+            missingTextures,
+            renderedAttachments);
+    }
+
+    private static bool AppendDocument(
+        BmdDocument document,
+        IReadOnlyList<MuTextureAsset?> meshTextures,
+        IReadOnlyList<BonePose> poses,
+        Model3DGroup model,
+        IDictionary<string, BitmapSource> bitmapCache,
+        ref int renderedTriangles,
+        ref int skippedTriangles,
+        ref int loadedTextures,
+        ref int missingTextures,
+        CancellationToken cancellationToken,
+        IReadOnlyList<BonePose>? parentPoses = null,
+        int parentBoneIndex = -1)
+    {
+        var anyRendered = false;
+
+        for (var meshIndex = 0; meshIndex < document.Meshes.Count; meshIndex++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var mesh = document.Meshes[meshIndex];
+            var geometry = new MeshGeometry3D();
+
+            foreach (var triangle in mesh.Triangles)
+            {
+                if (TryAppendTriangle(mesh, triangle, poses, geometry, 0, 2, 1, parentPoses, parentBoneIndex))
+                    renderedTriangles++;
+                else
+                    skippedTriangles++;
+
+                if (triangle.Polygon == 4)
+                {
+                    if (TryAppendTriangle(mesh, triangle, poses, geometry, 0, 2, 3, parentPoses, parentBoneIndex))
+                        renderedTriangles++;
+                    else
+                        skippedTriangles++;
+                }
+            }
+
+            if (geometry.Positions.Count == 0)
+                continue;
+
+            geometry.Freeze();
+
+            var texture = meshIndex < meshTextures.Count ? meshTextures[meshIndex] : null;
+            var material = BuildMaterial(texture, bitmapCache, out var hasTexture);
+            if (hasTexture)
+                loadedTextures++;
+            else if (!string.IsNullOrWhiteSpace(mesh.TexturePath))
+                missingTextures++;
+
+            var geometryModel = new GeometryModel3D(geometry, material)
+            {
+                BackMaterial = material
+            };
+            geometryModel.Freeze();
+            model.Children.Add(geometryModel);
+            anyRendered = true;
+        }
+
+        return anyRendered;
     }
 
     private static Material BuildMaterial(
@@ -298,7 +356,9 @@ public sealed class BmdStaticPreviewBuilder
         MeshGeometry3D geometry,
         int cornerA,
         int cornerB,
-        int cornerC)
+        int cornerC,
+        IReadOnlyList<BonePose>? parentPoses = null,
+        int parentBoneIndex = -1)
     {
         Span<int> corners = stackalloc int[3] { cornerA, cornerB, cornerC };
         var pendingPositions = new Point3D[3];
@@ -326,10 +386,14 @@ public sealed class BmdStaticPreviewBuilder
             var position = TransformPosition(ToVector(vertex.Position), vertex.BoneIndex, poses);
             var transformedNormal = TransformNormal(ToVector(normal.Normal), vertex.BoneIndex, poses);
 
+            if (parentPoses is not null && parentBoneIndex >= 0)
+            {
+                position = TransformPosition(position, (short)parentBoneIndex, parentPoses);
+                transformedNormal = TransformNormal(transformedNormal, (short)parentBoneIndex, parentPoses);
+            }
+
             pendingPositions[outputIndex] = new Point3D(position.X, position.Y, position.Z);
             pendingNormals[outputIndex] = new Vector3D(transformedNormal.X, transformedNormal.Y, transformedNormal.Z);
-            // MU/Xulek preserve the BMD V coordinate. Texture decoders normalize the pixel rows;
-            // flipping V here applied the texture to the wrong regions of the character.
             pendingUvs[outputIndex] = new Point(uv.U, uv.V);
         }
 
