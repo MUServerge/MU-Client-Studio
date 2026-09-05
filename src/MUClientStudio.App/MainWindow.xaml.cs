@@ -1,5 +1,6 @@
 using System.IO;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Media3D;
@@ -20,6 +21,8 @@ public partial class MainWindow : Window
 
     private ClientWorkspace? _workspace;
     private PlayerCharacterSource? _currentCharacter;
+    private ItemCatalog? _itemCatalog;
+    private PlayerLoadout _loadout = PlayerLoadout.Empty;
     private CancellationTokenSource? _workspaceLoadCts;
     private CancellationTokenSource? _playerLoadCts;
     private long _playerRevision;
@@ -39,6 +42,7 @@ public partial class MainWindow : Window
         AnimationCombo.ItemsSource = Array.Empty<string>();
         AnimationCombo.SelectedIndex = -1;
         AnimationCombo.IsEnabled = false;
+        UpdateEquipmentButtons();
 
         Loaded += MainWindow_Loaded;
         Closed += MainWindow_Closed;
@@ -80,7 +84,7 @@ public partial class MainWindow : Window
         await LoadWorkspaceAsync(_workspace.SelectedRoot);
     }
 
-    private async void ClassCombo_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+    private async void ClassCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (ClassCombo.SelectedItem is not PlayerClassDefinition selected) return;
 
@@ -91,7 +95,7 @@ public partial class MainWindow : Window
             await LoadSelectedPlayerModelAsync(selected);
     }
 
-    private async void AnimationCombo_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+    private async void AnimationCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (_suppressAnimationSelection || AnimationCombo.SelectedIndex < 0 || _currentCharacter is null)
             return;
@@ -117,6 +121,142 @@ public partial class MainWindow : Window
         e.Handled = true;
     }
 
+    private async void EquipmentSlot_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button button ||
+            button.CommandParameter is not string slotName ||
+            !Enum.TryParse<PlayerEquipmentSlot>(slotName, out var slot))
+            return;
+
+        if (_itemCatalog is null)
+        {
+            MessageBox.Show(
+                this,
+                "Data/Local/item.bmd is not loaded. Open or refresh the MU client first.",
+                "MU Client Studio",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+            return;
+        }
+
+        var menu = BuildEquipmentMenu(slot);
+        button.ContextMenu = menu;
+        menu.PlacementTarget = button;
+        menu.IsOpen = true;
+    }
+
+    private ContextMenu BuildEquipmentMenu(PlayerEquipmentSlot slot)
+    {
+        var menu = new ContextMenu
+        {
+            Background = new SolidColorBrush(Color.FromRgb(11, 17, 24)),
+            Foreground = new SolidColorBrush(Color.FromRgb(216, 226, 238)),
+            BorderBrush = new SolidColorBrush(Color.FromRgb(42, 58, 78)),
+            BorderThickness = new Thickness(1),
+            MaxHeight = 480,
+            MinWidth = 250
+        };
+
+        var none = CreateEquipmentMenuItem(slot is PlayerEquipmentSlot.LeftWeapon or PlayerEquipmentSlot.RightWeapon or PlayerEquipmentSlot.Wings
+            ? "None"
+            : "Base character part");
+        none.FontWeight = FontWeights.SemiBold;
+        none.Click += async (_, _) => await ApplyEquipmentSelectionAsync(slot, null);
+        menu.Items.Add(none);
+        menu.Items.Add(new Separator());
+
+        if (slot is PlayerEquipmentSlot.LeftWeapon or PlayerEquipmentSlot.RightWeapon)
+        {
+            for (var group = 0; group <= 6; group++)
+            {
+                var groupItems = _itemCatalog!.GetGroup(group);
+                if (groupItems.Count == 0) continue;
+
+                var groupMenu = CreateEquipmentMenuItem($"Group {group}  •  {groupItems.Count} items");
+                foreach (var item in groupItems)
+                    groupMenu.Items.Add(CreateItemChoice(slot, item));
+                menu.Items.Add(groupMenu);
+            }
+        }
+        else
+        {
+            var group = slot switch
+            {
+                PlayerEquipmentSlot.Helm => 7,
+                PlayerEquipmentSlot.Armor => 8,
+                PlayerEquipmentSlot.Pants => 9,
+                PlayerEquipmentSlot.Gloves => 10,
+                PlayerEquipmentSlot.Boots => 11,
+                PlayerEquipmentSlot.Wings => 12,
+                _ => -1
+            };
+
+            if (group >= 0)
+            {
+                foreach (var item in _itemCatalog!.GetGroup(group))
+                    menu.Items.Add(CreateItemChoice(slot, item));
+            }
+        }
+
+        return menu;
+    }
+
+    private MenuItem CreateItemChoice(PlayerEquipmentSlot slot, ItemDefinition item)
+    {
+        var choice = CreateEquipmentMenuItem($"{item.DisplayName}   [{item.Group}:{item.Id}]");
+        choice.ToolTip = item.ModelPath;
+        choice.Click += async (_, _) => await ApplyEquipmentSelectionAsync(slot, item);
+        return choice;
+    }
+
+    private static MenuItem CreateEquipmentMenuItem(string header) => new()
+    {
+        Header = header,
+        Foreground = new SolidColorBrush(Color.FromRgb(216, 226, 238)),
+        Background = Brushes.Transparent,
+        Padding = new Thickness(9, 5, 12, 5)
+    };
+
+    private async Task ApplyEquipmentSelectionAsync(PlayerEquipmentSlot slot, ItemDefinition? item)
+    {
+        _loadout = _loadout.With(slot, item);
+        UpdateEquipmentButtons();
+        if (_workspace is not null)
+            await LoadSelectedPlayerModelAsync();
+    }
+
+    private void UpdateEquipmentButtons()
+    {
+        UpdateEquipmentButton(HelmSlotButton, PlayerEquipmentSlot.Helm, "Base Helm");
+        UpdateEquipmentButton(ArmorSlotButton, PlayerEquipmentSlot.Armor, "Base Armor");
+        UpdateEquipmentButton(PantsSlotButton, PlayerEquipmentSlot.Pants, "Base Pants");
+        UpdateEquipmentButton(GlovesSlotButton, PlayerEquipmentSlot.Gloves, "Base Gloves");
+        UpdateEquipmentButton(BootsSlotButton, PlayerEquipmentSlot.Boots, "Base Boots");
+        UpdateEquipmentButton(LeftWeaponSlotButton, PlayerEquipmentSlot.LeftWeapon, "Left Weapon");
+        UpdateEquipmentButton(RightWeaponSlotButton, PlayerEquipmentSlot.RightWeapon, "Right Weapon");
+        UpdateEquipmentButton(WingsSlotButton, PlayerEquipmentSlot.Wings, "Wings");
+
+        var selected = Enum.GetValues<PlayerEquipmentSlot>().Count(slot => _loadout.Get(slot) is not null);
+        EquipmentCatalogStateText.Text = _itemCatalog is null ? "NO ITEM DB" : $"{selected}/8 EQUIPPED";
+        EquipmentCatalogStateText.Foreground = ResourceBrush(_itemCatalog is null ? "Gold" : "Green");
+    }
+
+    private void UpdateEquipmentButton(Button button, PlayerEquipmentSlot slot, string emptyLabel)
+    {
+        var item = _loadout.Get(slot);
+        button.Content = item is null ? emptyLabel : ShortItemName(item.DisplayName);
+        button.ToolTip = item is null
+            ? $"{emptyLabel} • click to select"
+            : $"{item.DisplayName} • {item.Key}\n{item.ModelPath}";
+    }
+
+    private static string ShortItemName(string value)
+    {
+        const int max = 16;
+        if (string.IsNullOrWhiteSpace(value) || value.Length <= max) return value;
+        return value[..(max - 1)] + "…";
+    }
+
     private async Task TryRestoreWorkspaceAsync()
     {
         ReplaceWorkspaceCancellation();
@@ -133,6 +273,7 @@ public partial class MainWindow : Window
             }
 
             ApplyWorkspace(restored);
+            await LoadItemCatalogAsync(token);
             await LoadSelectedPlayerModelAsync();
         }
         catch (OperationCanceledException)
@@ -156,6 +297,7 @@ public partial class MainWindow : Window
             token.ThrowIfCancellationRequested();
 
             ApplyWorkspace(workspace);
+            await LoadItemCatalogAsync(token);
             await LoadSelectedPlayerModelAsync();
         }
         catch (OperationCanceledException)
@@ -165,6 +307,34 @@ public partial class MainWindow : Window
         {
             SetWorkspaceErrorState(ex.Message);
             MessageBox.Show(this, ex.Message, "MU Client Studio", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+    }
+
+    private async Task LoadItemCatalogAsync(CancellationToken cancellationToken)
+    {
+        if (_workspace is null) return;
+
+        _itemCatalog = null;
+        _loadout = PlayerLoadout.Empty;
+        EquipmentCatalogStateText.Text = "LOADING ITEMS";
+        EquipmentCatalogStateText.Foreground = ResourceBrush("Muted");
+        EquipmentCatalogSummaryText.Text = "Local/item.bmd";
+        UpdateEquipmentButtons();
+
+        try
+        {
+            var catalog = await _characterLoader.LoadItemCatalogAsync(_workspace.DataRoot, cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            _itemCatalog = catalog;
+            EquipmentCatalogSummaryText.Text = $"{catalog.Items.Count:N0} items";
+            UpdateEquipmentButtons();
+        }
+        catch (Exception ex) when (ex is FileNotFoundException or InvalidDataException or IOException or UnauthorizedAccessException)
+        {
+            _itemCatalog = null;
+            EquipmentCatalogStateText.Text = "ITEM DB ERROR";
+            EquipmentCatalogStateText.Foreground = ResourceBrush("Gold");
+            EquipmentCatalogSummaryText.Text = ex.Message;
         }
     }
 
@@ -202,8 +372,8 @@ public partial class MainWindow : Window
         InspectorStatusText.Foreground = ResourceBrush("Muted");
         ViewportStatusText.Text = $"Loading {selected.Name}";
         ViewportModelNameText.Text = selected.Name;
-        ViewportModelInfoText.Text = "Loading base body, shared skeleton, animation bank and textures...";
-        ViewportModelDetailText.Text = "Player/ArmorClass + Helm/Pant/Glove/Boot + Player/player.bmd";
+        ViewportModelInfoText.Text = "Loading body, selected equipment, animation bank and textures...";
+        ViewportModelDetailText.Text = "Player skeleton + Local/item.bmd equipment + Player/player.bmd";
         ResetModelMetadata();
 
         if (PlayerModelVisual.Content is null)
@@ -211,9 +381,10 @@ public partial class MainWindow : Window
 
         try
         {
-            var character = await _characterLoader.LoadBaseCharacterAsync(
+            var character = await _characterLoader.LoadCharacterAsync(
                 _workspace.DataRoot,
                 selected,
+                _loadout,
                 token);
             token.ThrowIfCancellationRequested();
 
@@ -270,7 +441,7 @@ public partial class MainWindow : Window
             PlayerModelVisual.Content = scene.Model;
             ViewportPlaceholder.Visibility = Visibility.Collapsed;
             FrameCamera(scene.Bounds);
-            ViewportStatusText.Text = $"Action {actionIndex:D3} • {scene.RenderedParts} body parts • {scene.RenderedTriangles:N0} triangles";
+            ViewportStatusText.Text = $"Action {actionIndex:D3} • {scene.RenderedParts} body parts • {scene.RenderedAttachments} attachments • {scene.RenderedTriangles:N0} triangles";
             AnimationSummaryText.Text = $"Action {actionIndex:D3} • Player/player.bmd • {PlayerProfile.AnimationFps} FPS";
         }
         catch (OperationCanceledException)
@@ -303,13 +474,15 @@ public partial class MainWindow : Window
         InspectorBonesText.Text = character.BoneCount.ToString("N0");
         InspectorActionsText.Text = character.ActionCount.ToString("N0");
 
-        ViewportStatusText.Text = $"Character ready • {scene.RenderedParts}/5 body parts • {scene.RenderedTriangles:N0} triangles";
+        ViewportStatusText.Text = $"Character ready • {scene.RenderedParts}/5 body parts • {scene.RenderedAttachments} attachments • {scene.RenderedTriangles:N0} triangles";
         ViewportModelNameText.Text = selected.Name;
-        ViewportModelInfoText.Text = $"{scene.RenderedParts}/5 body parts  •  {character.MeshCount:N0} meshes  •  {character.BoneCount:N0} bones";
-        ViewportModelDetailText.Text = $"Textures {scene.LoadedTextures}/{character.TextureCount}  •  Player actions {character.ActionCount:N0}  •  diagnostics {character.Diagnostics.Count}";
+        ViewportModelInfoText.Text = $"{scene.RenderedParts}/5 body parts • {character.EquippedBodyPartCount} set parts • {scene.RenderedAttachments} attachments";
+        ViewportModelDetailText.Text = $"Textures {scene.LoadedTextures}/{character.TextureCount} • {character.MeshCount:N0} meshes • diagnostics {character.Diagnostics.Count}";
 
-        ModelSummaryText.Text = $"{selected.Name} • {scene.RenderedParts}/5 body parts • {scene.LoadedTextures}/{character.TextureCount} textures";
-        ModelPathText.Text = "Player/ArmorClass + Helm/Pant/Glove/Boot";
+        ModelSummaryText.Text = $"{selected.Name} • {character.EquippedBodyPartCount}/5 set parts • {scene.RenderedAttachments} attachments • {scene.LoadedTextures}/{character.TextureCount} textures";
+        ModelPathText.Text = character.EquippedBodyPartCount == 0
+            ? "Player/ArmorClass + Helm/Pant/Glove/Boot"
+            : "Player base skeleton + item.bmd equipment models";
         SkeletonSummaryText.Text = $"{character.BoneCount:N0} bones • shared body skeleton • attach 33 / 42 / 47";
         AnimationSummaryText.Text = $"{character.ActionCount:N0} actions • Player/player.bmd • {PlayerProfile.AnimationFps} FPS";
 
@@ -329,7 +502,7 @@ public partial class MainWindow : Window
             _suppressAnimationSelection = false;
         }
 
-        FooterStateText.Text = $"CHARACTER READY  •  {scene.RenderedParts}/5 PARTS  •  {scene.LoadedTextures}/{character.TextureCount} TEX";
+        FooterStateText.Text = $"CHARACTER READY • {character.EquippedBodyPartCount}/5 SET • {scene.RenderedAttachments} ATTACH • {scene.LoadedTextures}/{character.TextureCount} TEX";
         FooterStateText.Foreground = ResourceBrush(character.Diagnostics.Count == 0 ? "Green" : "Gold");
     }
 
