@@ -35,8 +35,13 @@
                                         BorderBrush="#223247"
                                         BorderThickness="1"
                                         CornerRadius="4"
-                                        Padding="5,3">
-                                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                        Padding="4,3">
+                                    <TextBlock Text="{TemplateBinding Content}"
+                                               Foreground="{TemplateBinding Foreground}"
+                                               FontSize="8"
+                                               TextAlignment="Center"
+                                               TextTrimming="CharacterEllipsis"
+                                               HorizontalAlignment="Stretch"/>
                                 </Border>
                             </Grid>
                         </Border>
@@ -189,7 +194,7 @@
                                     <TextBlock Text="EQUIPMENT" Foreground="#6D7C90" FontSize="8"/>
                                     <TextBlock Text="Character loadout" FontSize="12" FontWeight="SemiBold" Margin="0,4,0,0"/>
                                 </StackPanel>
-                                <TextBlock Text="BASE"
+                                <TextBlock x:Name="EquipmentCatalogStateText" Text="BASE"
                                            Foreground="#53667D"
                                            FontSize="8"
                                            HorizontalAlignment="Right"
@@ -209,29 +214,29 @@
                                     <RowDefinition Height="72"/>
                                 </Grid.RowDefinitions>
 
-                                <Button Grid.Row="0" Grid.Column="1" Style="{StaticResource EquipmentSlotButton}" Tag="HEAD" Content="Helm" Margin="4"/>
-                                <Button Grid.Row="0" Grid.Column="2" Style="{StaticResource EquipmentSlotButton}" Tag="BACK" Content="Wings" Margin="4"/>
+                                <Button x:Name="HelmSlotButton" Grid.Row="0" Grid.Column="1" Style="{StaticResource EquipmentSlotButton}" Tag="HEAD" Content="Base Helm" CommandParameter="Helm" Click="EquipmentSlot_Click" Margin="4"/>
+                                <Button x:Name="WingsSlotButton" Grid.Row="0" Grid.Column="2" Style="{StaticResource EquipmentSlotButton}" Tag="BACK" Content="Wings" CommandParameter="Wings" Click="EquipmentSlot_Click" Margin="4"/>
 
-                                <Button Grid.Row="1" Grid.RowSpan="2" Grid.Column="0" Style="{StaticResource EquipmentSlotButton}" Tag="HAND L" Content="Left Weapon" Margin="4"/>
-                                <Button Grid.Row="1" Grid.Column="1" Style="{StaticResource EquipmentSlotButton}" Tag="BODY" Content="Armor" Margin="4"/>
-                                <Button Grid.Row="1" Grid.RowSpan="2" Grid.Column="2" Style="{StaticResource EquipmentSlotButton}" Tag="HAND R" Content="Right Weapon" Margin="4"/>
-                                <Button Grid.Row="2" Grid.Column="1" Style="{StaticResource EquipmentSlotButton}" Tag="LEGS" Content="Pants" Margin="4"/>
+                                <Button x:Name="LeftWeaponSlotButton" Grid.Row="1" Grid.RowSpan="2" Grid.Column="0" Style="{StaticResource EquipmentSlotButton}" Tag="HAND L" Content="Left Weapon" CommandParameter="LeftWeapon" Click="EquipmentSlot_Click" Margin="4"/>
+                                <Button x:Name="ArmorSlotButton" Grid.Row="1" Grid.Column="1" Style="{StaticResource EquipmentSlotButton}" Tag="BODY" Content="Base Armor" CommandParameter="Armor" Click="EquipmentSlot_Click" Margin="4"/>
+                                <Button x:Name="RightWeaponSlotButton" Grid.Row="1" Grid.RowSpan="2" Grid.Column="2" Style="{StaticResource EquipmentSlotButton}" Tag="HAND R" Content="Right Weapon" CommandParameter="RightWeapon" Click="EquipmentSlot_Click" Margin="4"/>
+                                <Button x:Name="PantsSlotButton" Grid.Row="2" Grid.Column="1" Style="{StaticResource EquipmentSlotButton}" Tag="LEGS" Content="Base Pants" CommandParameter="Pants" Click="EquipmentSlot_Click" Margin="4"/>
 
-                                <Button Grid.Row="3" Grid.Column="0" Style="{StaticResource EquipmentSlotButton}" Tag="HANDS" Content="Gloves" Margin="4"/>
-                                <Button Grid.Row="3" Grid.Column="2" Style="{StaticResource EquipmentSlotButton}" Tag="FEET" Content="Boots" Margin="4"/>
+                                <Button x:Name="GlovesSlotButton" Grid.Row="3" Grid.Column="0" Style="{StaticResource EquipmentSlotButton}" Tag="HANDS" Content="Base Gloves" CommandParameter="Gloves" Click="EquipmentSlot_Click" Margin="4"/>
+                                <Button x:Name="BootsSlotButton" Grid.Row="3" Grid.Column="2" Style="{StaticResource EquipmentSlotButton}" Tag="FEET" Content="Base Boots" CommandParameter="Boots" Click="EquipmentSlot_Click" Margin="4"/>
 
                                 <Border Grid.Row="3" Grid.Column="1" Margin="4" Background="#080E15" BorderBrush="#1E2D40" BorderThickness="1" CornerRadius="7">
                                     <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
                                         <TextBlock Text="ITEM" Foreground="#30445B" FontSize="8" HorizontalAlignment="Center"/>
-                                        <TextBlock Text="BROWSER" Foreground="#435970" FontSize="8" FontWeight="SemiBold" Margin="0,2,0,0"/>
+                                        <TextBlock Text="LOADOUT" Foreground="#435970" FontSize="8" FontWeight="SemiBold" Margin="0,2,0,0"/>
                                     </StackPanel>
                                 </Border>
                             </Grid>
 
                             <Border Grid.Row="2" Background="#091018" BorderBrush="#1F2E42" BorderThickness="1" CornerRadius="6" Padding="8,6" Margin="2,10,2,1">
                                 <Grid>
-                                    <TextBlock Text="8 equipment slots" Foreground="#607187" FontSize="8"/>
-                                    <TextBlock Text="item.bmd wiring next" Foreground="#53667D" FontSize="8" HorizontalAlignment="Right"/>
+                                    <TextBlock Text="Click a slot to equip" Foreground="#607187" FontSize="8"/>
+                                    <TextBlock x:Name="EquipmentCatalogSummaryText" Text="Local/item.bmd" Foreground="#53667D" FontSize="8" HorizontalAlignment="Right"/>
                                 </Grid>
                             </Border>
                         </Grid>
