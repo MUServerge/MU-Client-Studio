@@ -7,16 +7,6 @@ public static class PlayerProfile
     public const int WingBone = 47;
     public const int AnimationFps = 24;
 
-    public static readonly IReadOnlyList<PlayerClass> Classes =
-    [
-        new("Dark Wizard", "DW"),
-        new("Dark Knight", "DK"),
-        new("Fairy Elf", "FE"),
-        new("Magic Gladiator", "MG"),
-        new("Dark Lord", "DL"),
-        new("Summoner", "SU")
-    ];
-
     public static readonly IReadOnlyList<EquipmentSlot> EquipmentSlots =
     [
         new("Helm", 7, null),
@@ -30,5 +20,4 @@ public static class PlayerProfile
     ];
 }
 
-public sealed record PlayerClass(string Name, string Token);
 public sealed record EquipmentSlot(string Name, int? ItemGroup, int? AttachmentBone);
