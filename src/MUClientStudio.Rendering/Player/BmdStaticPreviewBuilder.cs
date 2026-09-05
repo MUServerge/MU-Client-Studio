@@ -179,7 +179,7 @@ public sealed class BmdStaticPreviewBuilder
             if (texture.Width <= 0 || texture.Height <= 0 || texture.Data.Length < texture.Width * texture.Height * 4)
                 throw new InvalidDataException("Invalid BGRA texture payload.");
 
-            var pixels = texture.FlipVertical
+            var rawPixels = texture.FlipVertical
                 ? FlipRows(texture.Data, texture.Width, texture.Height)
                 : texture.Data;
 
@@ -190,7 +190,7 @@ public sealed class BmdStaticPreviewBuilder
                 96,
                 PixelFormats.Bgra32,
                 null,
-                pixels,
+                rawPixels,
                 texture.Width * 4);
             bitmap.Freeze();
             return bitmap;
@@ -217,10 +217,10 @@ public sealed class BmdStaticPreviewBuilder
         }
 
         var stride = checked(source.PixelWidth * 4);
-        var pixels = new byte[checked(stride * source.PixelHeight)];
-        source.CopyPixels(pixels, stride, 0);
+        var decodedPixels = new byte[checked(stride * source.PixelHeight)];
+        source.CopyPixels(decodedPixels, stride, 0);
         if (texture.FlipVertical)
-            pixels = FlipRows(pixels, source.PixelWidth, source.PixelHeight);
+            decodedPixels = FlipRows(decodedPixels, source.PixelWidth, source.PixelHeight);
 
         var bitmapSource = BitmapSource.Create(
             source.PixelWidth,
@@ -229,7 +229,7 @@ public sealed class BmdStaticPreviewBuilder
             source.DpiY > 0 ? source.DpiY : 96,
             PixelFormats.Bgra32,
             null,
-            pixels,
+            decodedPixels,
             stride);
         bitmapSource.Freeze();
         return bitmapSource;
