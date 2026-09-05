@@ -1,0 +1,22 @@
+# Visual Studio / .NET
+.vs/
+**/bin/
+**/obj/
+artifacts/
+publish/
+TestResults/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Rider
+.idea/
+*.sln.iml
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Local MU workspace state
+*.local.json
