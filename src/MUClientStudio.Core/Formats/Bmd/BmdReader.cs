@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using System.Collections.Concurrent;
 using System.Text;
 using MUClientStudio.Models.Formats.Bmd;
 
@@ -12,21 +13,35 @@ public sealed class BmdReader
     private const int MaximumMeshElements = 1_000_000;
     private const int MaximumAnimationKeys = 100_000;
     private const int TriangleStride = 64;
+    private const int MaximumCachedDocuments = 512;
+
+    private static readonly ConcurrentDictionary<string, CacheEntry> FileCache =
+        new(StringComparer.OrdinalIgnoreCase);
 
     public async Task<BmdDocument> ReadAsync(string path, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(path))
             throw new ArgumentException("BMD path is required.", nameof(path));
 
-        var file = new FileInfo(path);
+        var fullPath = Path.GetFullPath(path);
+        var file = new FileInfo(fullPath);
         if (!file.Exists)
-            throw new FileNotFoundException("BMD model was not found.", path);
+            throw new FileNotFoundException("BMD model was not found.", fullPath);
         if (file.Length > BmdFileDecoder.MaximumFileSize)
             throw new BmdFormatException($"BMD file exceeds the {BmdFileDecoder.MaximumFileSize / 1024 / 1024} MB safety limit.");
 
-        var bytes = await File.ReadAllBytesAsync(path, cancellationToken).ConfigureAwait(false);
+        var stamp = new FileStamp(file.Length, file.LastWriteTimeUtc.Ticks);
+        if (FileCache.TryGetValue(fullPath, out var cached) && cached.Stamp == stamp)
+            return cached.Document;
+
+        var bytes = await File.ReadAllBytesAsync(fullPath, cancellationToken).ConfigureAwait(false);
         cancellationToken.ThrowIfCancellationRequested();
-        return Read(bytes, path, cancellationToken);
+        var document = Read(bytes, fullPath, cancellationToken);
+
+        if (FileCache.Count >= MaximumCachedDocuments)
+            FileCache.Clear();
+        FileCache[fullPath] = new CacheEntry(stamp, document);
+        return document;
     }
 
     public BmdDocument Read(ReadOnlySpan<byte> source, string sourcePath = "<memory>", CancellationToken cancellationToken = default)
@@ -176,6 +191,9 @@ public sealed class BmdReader
             throw new BmdFormatException($"Invalid {label} count: {value}.");
         return value;
     }
+
+    private readonly record struct FileStamp(long Length, long LastWriteTicks);
+    private sealed record CacheEntry(FileStamp Stamp, BmdDocument Document);
 
     private sealed class BufferReader
     {
