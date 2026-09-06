@@ -25,4 +25,16 @@ public static class PlayerEquipmentRules
 
     public static bool IsPlayerEquipment(ItemDefinition item) =>
         IsWeapon(item) || IsBodyEquipment(item) || IsStandardWing(item);
+
+    public static string GetWeaponGroupName(int group) => group switch
+    {
+        0 => "Sword",
+        1 => "Axe",
+        2 => "Mace / Scepter",
+        3 => "Spear",
+        4 => "Bow / Crossbow",
+        5 => "Staff",
+        6 => "Shield",
+        _ => "Item"
+    };
 }
