@@ -6,6 +6,8 @@ MU Client Studio is a native Windows desktop editor for MU Online client data.
 
 This repository is the clean rewrite of the abandoned Electron/Next.js version.
 
+The long-term product is a unified client-data studio: Player/BMD viewing and editing first, then the verified client tables and editors exposed by the real client data set (for example Local tables and world data such as `Gate.bmd`). Server-emulator add-ons are not part of the base client editor unless they are explicitly added as a separate future scope.
+
 ## Stack
 
 - C# / .NET 8
@@ -18,7 +20,7 @@ This repository is the clean rewrite of the abandoned Electron/Next.js version.
 
 Only **Player / Characters** may be developed until Player is complete.
 
-Do not add placeholder modules for Items, Skills, Gates, Warp, Maps, etc.
+Do not add placeholder modules for Items, Skills, Gates, Warp, Maps, etc. Their codecs/data contracts may be researched and tested when needed for the common editor foundation, but no competing UI module starts before the Player completion gate.
 
 ## UI contract
 
@@ -86,8 +88,10 @@ Advanced/evolution class display states must resolve back to the correct base ch
 - 9 Pants
 - 10 Gloves
 - 11 Boots
-- 0–6 weapons
-- 12 wings
+- 0–6 weapon groups
+- 12 is a mixed item group; only the verified standard-wing IDs are treated as wings by Player
+
+Never classify the whole of group 12 as wings.
 
 ### Attachment bones
 
@@ -106,7 +110,7 @@ The body is one shared animated character skeleton.
 - base torso provides the authoritative character skeleton
 - base helm/pants/gloves/boots meshes are rebound to that skeleton
 - equipped groups 7–11 replace the corresponding base body mesh and are rebound to the same skeleton
-- weapons and wings remain independent model hierarchies attached to BMD bones 33/42/47
+- weapons and standard wings remain independent model hierarchies attached to BMD bones 33/42/47
 
 ### Animation
 
@@ -153,22 +157,21 @@ Do not invent OZB support without source/data evidence.
 
 ## Model and asset routing
 
-Main_EX603 proves the important directory split:
+`Data/Local/item.bmd` supplies item metadata. It does **not** contain the 3D model filename/path, so Player model routing is a separate source-backed responsibility.
 
-- groups 7–11 custom body equipment load from `Data\\Player\\`
-- custom wings load from `Data\\Item\\`
-- other custom items load from `Data\\Item\\`
+For the base client Player pipeline:
 
-Studio may use a compatibility fallback only when it is explicit and diagnostic:
+- groups 7–11 resolve body models from the verified Player model banks and use `Data/Player` as the primary body-model namespace
+- standard wings and normal item attachments resolve from the verified base-client item model map and use `Data/Item` as their primary namespace
+- compatibility fallback is allowed only when it is explicit and reported by diagnostics
 
-- groups 7–11: Player-first, then Item
-- other groups including wings: Item-first, then Player
+Do not silently derive model filenames from item display names.
 
-Do not silently guess a model path from a UI label when item/config data provides the model name/path.
+## Server-specific extensions are excluded
 
-## Custom wings
+`CustomWing`, `CUSTOM_WING_INFO`, `main.premium/main.free`, server custom-item tables and server-added wing/effect systems are **not part of the base MU Client Studio Player scope**.
 
-Main_EX603 proves custom wing behavior is configuration-driven. `ItemIndex`, `ModelName`, `ModelType`, option data, glow behavior, static effects and dynamic effects must never be inferred from model names alone.
+The Studio should edit and render the real client data first. Server-specific extensions may only be considered later as isolated optional integrations if the project scope is explicitly expanded.
 
 ## Player architecture authority
 
@@ -178,6 +181,6 @@ Any implementation that bypasses that architecture needs an explicit source-back
 
 ## First functional milestone
 
-`Open Client -> Player -> class -> base character -> equipment -> weapon/wing attachments -> animation -> inspector -> refresh`
+`Open Client -> Player -> class -> base character -> equipment -> weapon/standard-wing attachments -> animation -> inspector -> refresh`
 
-Only after this works correctly with representative real EX603 client Data should another module be considered.
+Only after this works correctly with representative real EX603 client Data should another editor module be considered.
