@@ -1,29 +1,33 @@
 namespace MUClientStudio.Models.Player;
 
+/// <summary>
+/// Player-facing projection of the verified EX603 Data/Local/Item.bmd record.
+///
+/// Important: Local/Item.bmd does not contain a 3D model filename. Model routing is resolved
+/// separately by PlayerItemModelResolver from group/id, target class, client source semantics
+/// and the assets that actually exist in the opened Data directory.
+/// </summary>
 public sealed record ItemDefinition(
     int Index,
     int Group,
     int Id,
-    string ModelFolder,
-    string ModelName,
     string ItemName,
-    string ModelPath,
-    int Width,
-    int Height,
-    int KindA,
-    int KindB,
-    int Type,
     bool TwoHands,
-    int DropLevel,
+    int Level,
     int Slot,
     int SkillIndex,
+    int Width,
+    int Height,
     int DamageMin,
     int DamageMax,
-    int DefenseRate,
+    int SuccessfulBlocking,
     int Defense,
-    int MagicResistance,
-    int AttackSpeed,
+    int MagicDefense,
+    int WeaponSpeed,
+    int WalkSpeed,
     int Durability,
+    int MagicDurability,
+    int MagicPower,
     int RequiredStrength,
     int RequiredDexterity,
     int RequiredEnergy,
@@ -31,12 +35,15 @@ public sealed record ItemDefinition(
     int RequiredCommand,
     int RequiredLevel,
     int ItemValue,
-    int Money)
+    int Money,
+    int AttackType,
+    IReadOnlyList<byte> RequireClass,
+    IReadOnlyList<byte> Resistance)
 {
     public string Key => $"{Group}:{Id}";
 
     public string DisplayName => string.IsNullOrWhiteSpace(ItemName)
-        ? (!string.IsNullOrWhiteSpace(ModelName) ? ModelName : $"Item {Group}:{Id}")
+        ? $"Item {Group}:{Id}"
         : ItemName;
 }
 
