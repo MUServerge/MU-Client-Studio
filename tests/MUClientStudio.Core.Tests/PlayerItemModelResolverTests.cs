@@ -36,6 +36,30 @@ public sealed class PlayerItemModelResolverTests
     }
 
     [Theory]
+    [InlineData(0, 0, "Sword", "Item/Sword01.bmd")]
+    [InlineData(1, 0, "Axe", "Item/Axe01.bmd")]
+    [InlineData(2, 0, "Mace / Scepter", "Item/Mace01.bmd")]
+    [InlineData(3, 0, "Spear", "Item/Spear01.bmd")]
+    [InlineData(4, 0, "Bow / Crossbow", "Item/Bow01.bmd")]
+    [InlineData(5, 0, "Staff", "Item/Staff01.bmd")]
+    [InlineData(6, 0, "Shield", "Item/Shield01.bmd")]
+    public void WeaponGroups_RouteToItemModelsAndExposeType(
+        int group,
+        int id,
+        string expectedType,
+        string expectedPath)
+    {
+        var resolver = new PlayerItemModelResolver();
+        var item = Item(group, id, $"Weapon {group}:{id}");
+
+        var candidates = resolver.GetCandidatePaths(DarkWizard, PlayerEquipmentSlot.LeftWeapon, item);
+
+        Assert.Equal(expectedType, PlayerEquipmentRules.GetWeaponGroupName(group));
+        Assert.Contains(expectedPath, candidates, StringComparer.OrdinalIgnoreCase);
+        Assert.DoesNotContain(candidates, path => path.StartsWith("Player/", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Theory]
     [InlineData(8, 0, "Player/ArmorMale01.bmd")]
     [InlineData(8, 10, "Player/ArmorElf01.bmd")]
     [InlineData(8, 29, "Player/HDK_ArmorMale01.bmd")]
@@ -83,9 +107,9 @@ public sealed class PlayerItemModelResolverTests
         0,
         0,
         0,
-        1,
-        1,
         0,
+        1,
+        1,
         0,
         0,
         0,
