@@ -322,7 +322,7 @@ public sealed class MuAnimatedPlayerGlRenderer
             return 0;
 
         var safeAction = Math.Clamp(actionIndex, 0, animationDocument.Actions.Count - 1);
-        var keyCount = Math.Max(1, animationDocument.Actions[safeAction].AnimationKeyCount);
+        var keyCount = Math.Max(1, (int)animationDocument.Actions[safeAction].AnimationKeyCount);
         var loopFrames = Math.Max(1, keyCount - 1);
         var tick = (long)Math.Floor(Math.Max(0, playbackSeconds) * SourceFramesPerSecond);
         return (int)(tick % loopFrames);
@@ -642,7 +642,7 @@ public sealed class MuAnimatedPlayerGlRenderer
         var stride = checked(width * 4);
         var output = new byte[checked(stride * height)];
         for (var y = 0; y < height; y++)
-            Buffer.BlockCopy(source, y * stride, output, (height - 1 - y) * stride, stride);
+            System.Buffer.BlockCopy(source, y * stride, output, (height - 1 - y) * stride, stride);
         return output;
     }
 
