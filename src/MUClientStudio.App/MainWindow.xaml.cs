@@ -28,6 +28,7 @@ public partial class MainWindow : Window
     private long _playerRevision;
     private long _previewRevision;
     private bool _suppressAnimationSelection;
+    private bool _suppressEquipmentSelection;
     private Point3D _cameraTarget = new(0, 0, 0);
     private double _cameraDistance = 320;
 
@@ -42,7 +43,7 @@ public partial class MainWindow : Window
         AnimationCombo.ItemsSource = Array.Empty<string>();
         AnimationCombo.SelectedIndex = -1;
         AnimationCombo.IsEnabled = false;
-        UpdateEquipmentButtons();
+        UpdateEquipmentSelectors();
 
         Loaded += MainWindow_Loaded;
         Closed += MainWindow_Closed;
@@ -90,6 +91,7 @@ public partial class MainWindow : Window
 
         InspectorClassText.Text = selected.Name;
         ModelPathText.Text = selected.BaseArmorModelPath;
+        UpdateEquipmentSelectors();
 
         if (_workspace is not null)
             await LoadSelectedPlayerModelAsync(selected);
@@ -121,141 +123,129 @@ public partial class MainWindow : Window
         e.Handled = true;
     }
 
-    private async void EquipmentSlot_Click(object sender, RoutedEventArgs e)
+    private async void EquipmentCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (sender is not Button button ||
-            button.CommandParameter is not string slotName ||
-            !Enum.TryParse<PlayerEquipmentSlot>(slotName, out var slot))
+        if (_suppressEquipmentSelection ||
+            sender is not ComboBox combo ||
+            combo.Tag is not string slotName ||
+            !Enum.TryParse<PlayerEquipmentSlot>(slotName, out var slot) ||
+            combo.SelectedItem is not EquipmentChoice choice)
             return;
 
-        if (_itemCatalog is null)
-        {
-            MessageBox.Show(
-                this,
-                "Data/Local/item.bmd is not loaded. Open or refresh the MU client first.",
-                "MU Client Studio",
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
+        var current = _loadout.Get(slot);
+        if ((current is null && choice.Item is null) ||
+            (current is not null && choice.Item is not null && current.Key == choice.Item.Key))
             return;
-        }
 
-        var menu = BuildEquipmentMenu(slot);
-        button.ContextMenu = menu;
-        menu.PlacementTarget = button;
-        menu.IsOpen = true;
+        await ApplyEquipmentSelectionAsync(slot, choice.Item);
     }
-
-    private ContextMenu BuildEquipmentMenu(PlayerEquipmentSlot slot)
-    {
-        var menu = new ContextMenu
-        {
-            Background = new SolidColorBrush(Color.FromRgb(11, 17, 24)),
-            Foreground = new SolidColorBrush(Color.FromRgb(216, 226, 238)),
-            BorderBrush = new SolidColorBrush(Color.FromRgb(42, 58, 78)),
-            BorderThickness = new Thickness(1),
-            MaxHeight = 480,
-            MinWidth = 250
-        };
-
-        var none = CreateEquipmentMenuItem(slot is PlayerEquipmentSlot.LeftWeapon or PlayerEquipmentSlot.RightWeapon or PlayerEquipmentSlot.Wings
-            ? "None"
-            : "Base character part");
-        none.FontWeight = FontWeights.SemiBold;
-        none.Click += async (_, _) => await ApplyEquipmentSelectionAsync(slot, null);
-        menu.Items.Add(none);
-        menu.Items.Add(new Separator());
-
-        if (slot is PlayerEquipmentSlot.LeftWeapon or PlayerEquipmentSlot.RightWeapon)
-        {
-            for (var group = 0; group <= 6; group++)
-            {
-                var groupItems = _itemCatalog!.GetGroup(group);
-                if (groupItems.Count == 0) continue;
-
-                var groupMenu = CreateEquipmentMenuItem($"Group {group}  •  {groupItems.Count} items");
-                foreach (var item in groupItems)
-                    groupMenu.Items.Add(CreateItemChoice(slot, item));
-                menu.Items.Add(groupMenu);
-            }
-        }
-        else
-        {
-            var group = slot switch
-            {
-                PlayerEquipmentSlot.Helm => 7,
-                PlayerEquipmentSlot.Armor => 8,
-                PlayerEquipmentSlot.Pants => 9,
-                PlayerEquipmentSlot.Gloves => 10,
-                PlayerEquipmentSlot.Boots => 11,
-                PlayerEquipmentSlot.Wings => 12,
-                _ => -1
-            };
-
-            if (group >= 0)
-            {
-                foreach (var item in _itemCatalog!.GetGroup(group))
-                    menu.Items.Add(CreateItemChoice(slot, item));
-            }
-        }
-
-        return menu;
-    }
-
-    private MenuItem CreateItemChoice(PlayerEquipmentSlot slot, ItemDefinition item)
-    {
-        var choice = CreateEquipmentMenuItem($"{item.DisplayName}   [{item.Group}:{item.Id}]");
-        choice.ToolTip = item.ModelPath;
-        choice.Click += async (_, _) => await ApplyEquipmentSelectionAsync(slot, item);
-        return choice;
-    }
-
-    private static MenuItem CreateEquipmentMenuItem(string header) => new()
-    {
-        Header = header,
-        Foreground = new SolidColorBrush(Color.FromRgb(216, 226, 238)),
-        Background = Brushes.Transparent,
-        Padding = new Thickness(9, 5, 12, 5)
-    };
 
     private async Task ApplyEquipmentSelectionAsync(PlayerEquipmentSlot slot, ItemDefinition? item)
     {
         _loadout = _loadout.With(slot, item);
-        UpdateEquipmentButtons();
+        UpdateEquipmentSelectors();
+
         if (_workspace is not null)
             await LoadSelectedPlayerModelAsync();
     }
 
-    private void UpdateEquipmentButtons()
+    private void UpdateEquipmentSelectors()
     {
-        UpdateEquipmentButton(HelmSlotButton, PlayerEquipmentSlot.Helm, "Base Helm");
-        UpdateEquipmentButton(ArmorSlotButton, PlayerEquipmentSlot.Armor, "Base Armor");
-        UpdateEquipmentButton(PantsSlotButton, PlayerEquipmentSlot.Pants, "Base Pants");
-        UpdateEquipmentButton(GlovesSlotButton, PlayerEquipmentSlot.Gloves, "Base Gloves");
-        UpdateEquipmentButton(BootsSlotButton, PlayerEquipmentSlot.Boots, "Base Boots");
-        UpdateEquipmentButton(LeftWeaponSlotButton, PlayerEquipmentSlot.LeftWeapon, "Left Weapon");
-        UpdateEquipmentButton(RightWeaponSlotButton, PlayerEquipmentSlot.RightWeapon, "Right Weapon");
-        UpdateEquipmentButton(WingsSlotButton, PlayerEquipmentSlot.Wings, "Wings");
+        var selectedClass = ClassCombo.SelectedItem as PlayerClassDefinition;
+
+        _suppressEquipmentSelection = true;
+        try
+        {
+            foreach (var (combo, slot) in GetEquipmentSelectors())
+            {
+                var choices = BuildEquipmentChoices(slot, selectedClass);
+                var current = _loadout.Get(slot);
+                var selectedChoice = current is null
+                    ? choices[0]
+                    : choices.FirstOrDefault(choice => choice.Item?.Key == current.Key);
+
+                if (selectedChoice is null)
+                {
+                    _loadout = _loadout.With(slot, null);
+                    selectedChoice = choices[0];
+                }
+
+                combo.ItemsSource = choices;
+                combo.SelectedItem = selectedChoice;
+                combo.IsEnabled = _itemCatalog is not null && selectedClass is not null && choices.Count > 1;
+                combo.ToolTip = selectedChoice.Item is null
+                    ? selectedChoice.Label
+                    : $"{selectedChoice.Item.DisplayName} • {selectedChoice.Item.Key}";
+            }
+        }
+        finally
+        {
+            _suppressEquipmentSelection = false;
+        }
 
         var selected = Enum.GetValues<PlayerEquipmentSlot>().Count(slot => _loadout.Get(slot) is not null);
         EquipmentCatalogStateText.Text = _itemCatalog is null ? "NO ITEM DB" : $"{selected}/8 EQUIPPED";
         EquipmentCatalogStateText.Foreground = ResourceBrush(_itemCatalog is null ? "Gold" : "Green");
     }
 
-    private void UpdateEquipmentButton(Button button, PlayerEquipmentSlot slot, string emptyLabel)
+    private IReadOnlyList<EquipmentChoice> BuildEquipmentChoices(
+        PlayerEquipmentSlot slot,
+        PlayerClassDefinition? selectedClass)
     {
-        var item = _loadout.Get(slot);
-        button.Content = item is null ? emptyLabel : ShortItemName(item.DisplayName);
-        button.ToolTip = item is null
-            ? $"{emptyLabel} • click to select"
-            : $"{item.DisplayName} • {item.Key}\n{item.ModelPath}";
+        var choices = new List<EquipmentChoice>
+        {
+            new(EmptyEquipmentLabel(slot), null)
+        };
+
+        if (_itemCatalog is null || selectedClass is null)
+            return choices;
+
+        IEnumerable<ItemDefinition> items = slot switch
+        {
+            PlayerEquipmentSlot.LeftWeapon or PlayerEquipmentSlot.RightWeapon =>
+                _itemCatalog.Items.Where(PlayerEquipmentRules.IsWeapon),
+            PlayerEquipmentSlot.Wings =>
+                _itemCatalog.Items.Where(PlayerEquipmentRules.IsStandardWing),
+            PlayerEquipmentSlot.Helm => _itemCatalog.GetGroup(7),
+            PlayerEquipmentSlot.Armor => _itemCatalog.GetGroup(8),
+            PlayerEquipmentSlot.Pants => _itemCatalog.GetGroup(9),
+            PlayerEquipmentSlot.Gloves => _itemCatalog.GetGroup(10),
+            PlayerEquipmentSlot.Boots => _itemCatalog.GetGroup(11),
+            _ => Array.Empty<ItemDefinition>()
+        };
+
+        choices.AddRange(items
+            .Where(item => item.SupportsClass(selectedClass.Id))
+            .OrderBy(item => item.Group)
+            .ThenBy(item => item.Id)
+            .Select(item => new EquipmentChoice(
+                $"{item.DisplayName}  [{item.Group}:{item.Id}]",
+                item)));
+
+        return choices;
     }
 
-    private static string ShortItemName(string value)
+    private IReadOnlyList<(ComboBox Combo, PlayerEquipmentSlot Slot)> GetEquipmentSelectors() =>
+    [
+        (HelmSlotCombo, PlayerEquipmentSlot.Helm),
+        (ArmorSlotCombo, PlayerEquipmentSlot.Armor),
+        (PantsSlotCombo, PlayerEquipmentSlot.Pants),
+        (GlovesSlotCombo, PlayerEquipmentSlot.Gloves),
+        (BootsSlotCombo, PlayerEquipmentSlot.Boots),
+        (LeftWeaponSlotCombo, PlayerEquipmentSlot.LeftWeapon),
+        (RightWeaponSlotCombo, PlayerEquipmentSlot.RightWeapon),
+        (WingsSlotCombo, PlayerEquipmentSlot.Wings)
+    ];
+
+    private static string EmptyEquipmentLabel(PlayerEquipmentSlot slot) => slot switch
     {
-        const int max = 16;
-        if (string.IsNullOrWhiteSpace(value) || value.Length <= max) return value;
-        return value[..(max - 1)] + "…";
-    }
+        PlayerEquipmentSlot.Helm => "Base helm",
+        PlayerEquipmentSlot.Armor => "Base armor",
+        PlayerEquipmentSlot.Pants => "Base pants",
+        PlayerEquipmentSlot.Gloves => "Base gloves",
+        PlayerEquipmentSlot.Boots => "Base boots",
+        _ => "None"
+    };
 
     private async Task TryRestoreWorkspaceAsync()
     {
@@ -319,19 +309,20 @@ public partial class MainWindow : Window
         EquipmentCatalogStateText.Text = "LOADING ITEMS";
         EquipmentCatalogStateText.Foreground = ResourceBrush("Muted");
         EquipmentCatalogSummaryText.Text = "Local/item.bmd";
-        UpdateEquipmentButtons();
+        UpdateEquipmentSelectors();
 
         try
         {
             var catalog = await _characterLoader.LoadItemCatalogAsync(_workspace.DataRoot, cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
             _itemCatalog = catalog;
-            EquipmentCatalogSummaryText.Text = $"{catalog.Items.Count:N0} items";
-            UpdateEquipmentButtons();
+            EquipmentCatalogSummaryText.Text = $"{catalog.Items.Count:N0} equipment items";
+            UpdateEquipmentSelectors();
         }
         catch (Exception ex) when (ex is FileNotFoundException or InvalidDataException or IOException or UnauthorizedAccessException)
         {
             _itemCatalog = null;
+            UpdateEquipmentSelectors();
             EquipmentCatalogStateText.Text = "ITEM DB ERROR";
             EquipmentCatalogStateText.Foreground = ResourceBrush("Gold");
             EquipmentCatalogSummaryText.Text = ex.Message;
@@ -616,4 +607,6 @@ public partial class MainWindow : Window
     }
 
     private Brush ResourceBrush(string key) => (Brush)FindResource(key);
+
+    private sealed record EquipmentChoice(string Label, ItemDefinition? Item);
 }
