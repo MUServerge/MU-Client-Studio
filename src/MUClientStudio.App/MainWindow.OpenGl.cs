@@ -189,6 +189,13 @@ public partial class MainWindow
             return;
 
         _loadout = _loadout.With(slot, choice.Item);
+
+        // A two-handed right-hand weapon owns both hands in the base client presentation.
+        if (slot == PlayerEquipmentSlot.RightWeapon && choice.Item?.TwoHands == true)
+            _loadout = _loadout.With(PlayerEquipmentSlot.LeftWeapon, null);
+        else if (slot == PlayerEquipmentSlot.LeftWeapon && choice.Item is not null && _loadout.RightWeapon?.TwoHands == true)
+            _loadout = _loadout.With(PlayerEquipmentSlot.RightWeapon, null);
+
         UpdateOpenGlEquipmentSelectors();
 
         if (_workspace is not null)
@@ -290,7 +297,9 @@ public partial class MainWindow
                 combo.IsEnabled = _itemCatalog is not null && selectedClass is not null && choices.Count > 1;
                 combo.ToolTip = selectedChoice.Item is null
                     ? selectedChoice.Label
-                    : $"{selectedChoice.Item.DisplayName} • {PlayerEquipmentRules.GetWeaponGroupName(selectedChoice.Item.Group)} • {selectedChoice.Item.Key}";
+                    : IsHandSlot(slot)
+                        ? $"{selectedChoice.Item.DisplayName} • {PlayerEquipmentRules.GetWeaponGroupName(selectedChoice.Item.Group)} • {selectedChoice.Item.Key}"
+                        : $"{selectedChoice.Item.DisplayName} • {selectedChoice.Item.Key}";
             }
         }
         finally
@@ -321,7 +330,8 @@ public partial class MainWindow
         IEnumerable<ItemDefinition> items = slot switch
         {
             PlayerEquipmentSlot.LeftWeapon or PlayerEquipmentSlot.RightWeapon =>
-                _itemCatalog.Items.Where(PlayerEquipmentRules.IsWeapon),
+                _itemCatalog.Items.Where(item =>
+                    PlayerEquipmentRules.CanEquipInHand(item, selectedClass.Id, slot)),
             PlayerEquipmentSlot.Wings =>
                 _itemCatalog.Items.Where(PlayerEquipmentRules.IsStandardWing),
             PlayerEquipmentSlot.Helm => _itemCatalog.GetGroup(7),
@@ -337,13 +347,16 @@ public partial class MainWindow
             .OrderBy(item => item.Group)
             .ThenBy(item => item.Id)
             .Select(item => new EquipmentChoice(
-                slot is PlayerEquipmentSlot.LeftWeapon or PlayerEquipmentSlot.RightWeapon
+                IsHandSlot(slot)
                     ? $"{PlayerEquipmentRules.GetWeaponGroupName(item.Group)} · {item.DisplayName}"
                     : item.DisplayName,
                 item)));
 
         return choices;
     }
+
+    private static bool IsHandSlot(PlayerEquipmentSlot slot) =>
+        slot is PlayerEquipmentSlot.LeftWeapon or PlayerEquipmentSlot.RightWeapon;
 
     private void OpenGlPlayerControl_MouseWheel(object sender, MouseWheelEventArgs e)
     {
