@@ -1,5 +1,6 @@
 using MUClientStudio.Core.Player;
 using MUClientStudio.Models.Player;
+using Xunit;
 
 namespace MUClientStudio.Core.Tests;
 
