@@ -4,59 +4,16 @@
         Title="MU Client Studio" Width="1440" Height="900" MinWidth="1180" MinHeight="720"
         Background="{StaticResource Bg}" WindowStartupLocation="CenterScreen">
     <Window.Resources>
-        <Style x:Key="EquipmentSlotButton" TargetType="Button">
-            <Setter Property="Foreground" Value="#D8E2EE"/>
-            <Setter Property="Background" Value="#080E15"/>
-            <Setter Property="BorderBrush" Value="#2A3A50"/>
-            <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="SlotBorder"
-                                Background="{TemplateBinding Background}"
-                                BorderBrush="{TemplateBinding BorderBrush}"
-                                BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="7">
-                            <Grid Margin="7">
-                                <TextBlock Text="{TemplateBinding Tag}"
-                                           Foreground="#34475E"
-                                           FontSize="8"
-                                           FontWeight="SemiBold"
-                                           HorizontalAlignment="Left"
-                                           VerticalAlignment="Top"/>
-                                <TextBlock Text="◇"
-                                           Foreground="#26394F"
-                                           FontSize="22"
-                                           HorizontalAlignment="Center"
-                                           VerticalAlignment="Center"/>
-                                <Border VerticalAlignment="Bottom"
-                                        Background="#0D151F"
-                                        BorderBrush="#223247"
-                                        BorderThickness="1"
-                                        CornerRadius="4"
-                                        Padding="4,3">
-                                    <TextBlock Text="{TemplateBinding Content}"
-                                               Foreground="{TemplateBinding Foreground}"
-                                               FontSize="8"
-                                               TextAlignment="Center"
-                                               TextTrimming="CharacterEllipsis"
-                                               HorizontalAlignment="Stretch"/>
-                                </Border>
-                            </Grid>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="SlotBorder" Property="Background" Value="#0E1722"/>
-                                <Setter TargetName="SlotBorder" Property="BorderBrush" Value="#425A77"/>
-                            </Trigger>
-                            <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="SlotBorder" Property="Background" Value="#132033"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
+        <Style x:Key="EquipmentFieldLabel" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="#6A7B90"/>
+            <Setter Property="FontSize" Value="8"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <Style x:Key="EquipmentComboBox" TargetType="ComboBox" BasedOn="{StaticResource V6ComboBox}">
+            <Setter Property="Height" Value="28"/>
+            <Setter Property="HorizontalContentAlignment" Value="Left"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
         </Style>
     </Window.Resources>
 
@@ -189,7 +146,7 @@
                                 <RowDefinition Height="Auto"/>
                             </Grid.RowDefinitions>
 
-                            <Grid Grid.Row="0" Margin="2,1,2,10">
+                            <Grid Grid.Row="0" Margin="2,1,2,12">
                                 <StackPanel>
                                     <TextBlock Text="EQUIPMENT" Foreground="#6D7C90" FontSize="8"/>
                                     <TextBlock Text="Character loadout" FontSize="12" FontWeight="SemiBold" Margin="0,4,0,0"/>
@@ -201,41 +158,52 @@
                                            VerticalAlignment="Bottom"/>
                             </Grid>
 
-                            <Grid Grid.Row="1" Height="360" VerticalAlignment="Center">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="*"/>
-                                </Grid.ColumnDefinitions>
-                                <Grid.RowDefinitions>
-                                    <RowDefinition Height="72"/>
-                                    <RowDefinition Height="104"/>
-                                    <RowDefinition Height="104"/>
-                                    <RowDefinition Height="72"/>
-                                </Grid.RowDefinitions>
-
-                                <Button x:Name="HelmSlotButton" Grid.Row="0" Grid.Column="1" Style="{StaticResource EquipmentSlotButton}" Tag="HEAD" Content="Base Helm" CommandParameter="Helm" Click="EquipmentSlot_Click" Margin="4"/>
-                                <Button x:Name="WingsSlotButton" Grid.Row="0" Grid.Column="2" Style="{StaticResource EquipmentSlotButton}" Tag="BACK" Content="Wings" CommandParameter="Wings" Click="EquipmentSlot_Click" Margin="4"/>
-
-                                <Button x:Name="LeftWeaponSlotButton" Grid.Row="1" Grid.RowSpan="2" Grid.Column="0" Style="{StaticResource EquipmentSlotButton}" Tag="HAND L" Content="Left Weapon" CommandParameter="LeftWeapon" Click="EquipmentSlot_Click" Margin="4"/>
-                                <Button x:Name="ArmorSlotButton" Grid.Row="1" Grid.Column="1" Style="{StaticResource EquipmentSlotButton}" Tag="BODY" Content="Base Armor" CommandParameter="Armor" Click="EquipmentSlot_Click" Margin="4"/>
-                                <Button x:Name="RightWeaponSlotButton" Grid.Row="1" Grid.RowSpan="2" Grid.Column="2" Style="{StaticResource EquipmentSlotButton}" Tag="HAND R" Content="Right Weapon" CommandParameter="RightWeapon" Click="EquipmentSlot_Click" Margin="4"/>
-                                <Button x:Name="PantsSlotButton" Grid.Row="2" Grid.Column="1" Style="{StaticResource EquipmentSlotButton}" Tag="LEGS" Content="Base Pants" CommandParameter="Pants" Click="EquipmentSlot_Click" Margin="4"/>
-
-                                <Button x:Name="GlovesSlotButton" Grid.Row="3" Grid.Column="0" Style="{StaticResource EquipmentSlotButton}" Tag="HANDS" Content="Base Gloves" CommandParameter="Gloves" Click="EquipmentSlot_Click" Margin="4"/>
-                                <Button x:Name="BootsSlotButton" Grid.Row="3" Grid.Column="2" Style="{StaticResource EquipmentSlotButton}" Tag="FEET" Content="Base Boots" CommandParameter="Boots" Click="EquipmentSlot_Click" Margin="4"/>
-
-                                <Border Grid.Row="3" Grid.Column="1" Margin="4" Background="#080E15" BorderBrush="#1E2D40" BorderThickness="1" CornerRadius="7">
-                                    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-                                        <TextBlock Text="ITEM" Foreground="#30445B" FontSize="8" HorizontalAlignment="Center"/>
-                                        <TextBlock Text="LOADOUT" Foreground="#435970" FontSize="8" FontWeight="SemiBold" Margin="0,2,0,0"/>
-                                    </StackPanel>
-                                </Border>
-                            </Grid>
+                            <StackPanel Grid.Row="1" VerticalAlignment="Top" Margin="2,0,2,0">
+                                <Grid Height="34" Margin="0,0,0,3">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="58"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                    <TextBlock Text="HELM" Style="{StaticResource EquipmentFieldLabel}"/>
+                                    <ComboBox x:Name="HelmSlotCombo" Grid.Column="1" Style="{StaticResource EquipmentComboBox}" Tag="Helm" DisplayMemberPath="Label" SelectionChanged="EquipmentCombo_SelectionChanged"/>
+                                </Grid>
+                                <Grid Height="34" Margin="0,0,0,3">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="58"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                    <TextBlock Text="ARMOR" Style="{StaticResource EquipmentFieldLabel}"/>
+                                    <ComboBox x:Name="ArmorSlotCombo" Grid.Column="1" Style="{StaticResource EquipmentComboBox}" Tag="Armor" DisplayMemberPath="Label" SelectionChanged="EquipmentCombo_SelectionChanged"/>
+                                </Grid>
+                                <Grid Height="34" Margin="0,0,0,3">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="58"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                    <TextBlock Text="PANTS" Style="{StaticResource EquipmentFieldLabel}"/>
+                                    <ComboBox x:Name="PantsSlotCombo" Grid.Column="1" Style="{StaticResource EquipmentComboBox}" Tag="Pants" DisplayMemberPath="Label" SelectionChanged="EquipmentCombo_SelectionChanged"/>
+                                </Grid>
+                                <Grid Height="34" Margin="0,0,0,3">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="58"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                    <TextBlock Text="GLOVES" Style="{StaticResource EquipmentFieldLabel}"/>
+                                    <ComboBox x:Name="GlovesSlotCombo" Grid.Column="1" Style="{StaticResource EquipmentComboBox}" Tag="Gloves" DisplayMemberPath="Label" SelectionChanged="EquipmentCombo_SelectionChanged"/>
+                                </Grid>
+                                <Grid Height="34" Margin="0,0,0,3">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="58"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                    <TextBlock Text="BOOTS" Style="{StaticResource EquipmentFieldLabel}"/>
+                                    <ComboBox x:Name="BootsSlotCombo" Grid.Column="1" Style="{StaticResource EquipmentComboBox}" Tag="Boots" DisplayMemberPath="Label" SelectionChanged="EquipmentCombo_SelectionChanged"/>
+                                </Grid>
+                                <Grid Height="34" Margin="0,0,0,3">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="58"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                    <TextBlock Text="LEFT" Style="{StaticResource EquipmentFieldLabel}"/>
+                                    <ComboBox x:Name="LeftWeaponSlotCombo" Grid.Column="1" Style="{StaticResource EquipmentComboBox}" Tag="LeftWeapon" DisplayMemberPath="Label" SelectionChanged="EquipmentCombo_SelectionChanged"/>
+                                </Grid>
+                                <Grid Height="34" Margin="0,0,0,3">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="58"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                    <TextBlock Text="RIGHT" Style="{StaticResource EquipmentFieldLabel}"/>
+                                    <ComboBox x:Name="RightWeaponSlotCombo" Grid.Column="1" Style="{StaticResource EquipmentComboBox}" Tag="RightWeapon" DisplayMemberPath="Label" SelectionChanged="EquipmentCombo_SelectionChanged"/>
+                                </Grid>
+                                <Grid Height="34">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="58"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                    <TextBlock Text="WINGS" Style="{StaticResource EquipmentFieldLabel}"/>
+                                    <ComboBox x:Name="WingsSlotCombo" Grid.Column="1" Style="{StaticResource EquipmentComboBox}" Tag="Wings" DisplayMemberPath="Label" SelectionChanged="EquipmentCombo_SelectionChanged"/>
+                                </Grid>
+                            </StackPanel>
 
                             <Border Grid.Row="2" Background="#091018" BorderBrush="#1F2E42" BorderThickness="1" CornerRadius="6" Padding="8,6" Margin="2,10,2,1">
                                 <Grid>
-                                    <TextBlock Text="Click a slot to equip" Foreground="#607187" FontSize="8"/>
+                                    <TextBlock Text="Select equipment" Foreground="#607187" FontSize="8"/>
                                     <TextBlock x:Name="EquipmentCatalogSummaryText" Text="Local/item.bmd" Foreground="#53667D" FontSize="8" HorizontalAlignment="Right"/>
                                 </Grid>
                             </Border>
