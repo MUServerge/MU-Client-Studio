@@ -65,6 +65,9 @@ public sealed class PlayerItemModelResolver
         ArgumentNullException.ThrowIfNull(playerClass);
         ArgumentNullException.ThrowIfNull(item);
 
+        if (!item.SupportsClass(playerClass.Id))
+            return null;
+
         foreach (var candidate in BuildCandidates(playerClass, slot, item))
         {
             var relativePath = NormalizeRelativePath(candidate.RelativePath);
@@ -79,11 +82,16 @@ public sealed class PlayerItemModelResolver
     public IReadOnlyList<string> GetCandidatePaths(
         PlayerClassDefinition playerClass,
         PlayerEquipmentSlot slot,
-        ItemDefinition item) =>
-        BuildCandidates(playerClass, slot, item)
+        ItemDefinition item)
+    {
+        if (!item.SupportsClass(playerClass.Id))
+            return Array.Empty<string>();
+
+        return BuildCandidates(playerClass, slot, item)
             .Select(candidate => NormalizeRelativePath(candidate.RelativePath))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
+    }
 
     private static IEnumerable<ModelCandidate> BuildCandidates(
         PlayerClassDefinition playerClass,
