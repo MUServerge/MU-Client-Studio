@@ -59,6 +59,32 @@ public sealed class PlayerItemModelResolverTests
         Assert.DoesNotContain(candidates, path => path.StartsWith("Player/", StringComparison.OrdinalIgnoreCase));
     }
 
+    [Fact]
+    public void HandRules_UseItemBmdSlotAndClientDualWieldRules()
+    {
+        var wizardClass = new byte[] { 1, 0, 0, 0, 0, 0, 0 };
+        var knightClass = new byte[] { 0, 1, 0, 0, 0, 0, 0 };
+        var rightHandSwordForWizard = Item(0, 0, "Kris", wizardClass, slot: 0);
+        var rightHandSwordForKnight = Item(0, 0, "Kris", knightClass, slot: 0);
+        var twoHandSwordForKnight = Item(0, 10, "Two Hand Sword", knightClass, twoHands: true, slot: 0);
+        var leftHandShieldForWizard = Item(6, 0, "Small Shield", wizardClass, slot: 1);
+
+        Assert.True(PlayerEquipmentRules.CanEquipInHand(
+            rightHandSwordForWizard, PlayerClassId.DarkWizard, PlayerEquipmentSlot.RightWeapon));
+        Assert.False(PlayerEquipmentRules.CanEquipInHand(
+            rightHandSwordForWizard, PlayerClassId.DarkWizard, PlayerEquipmentSlot.LeftWeapon));
+
+        Assert.True(PlayerEquipmentRules.CanEquipInHand(
+            rightHandSwordForKnight, PlayerClassId.DarkKnight, PlayerEquipmentSlot.LeftWeapon));
+        Assert.False(PlayerEquipmentRules.CanEquipInHand(
+            twoHandSwordForKnight, PlayerClassId.DarkKnight, PlayerEquipmentSlot.LeftWeapon));
+
+        Assert.True(PlayerEquipmentRules.CanEquipInHand(
+            leftHandShieldForWizard, PlayerClassId.DarkWizard, PlayerEquipmentSlot.LeftWeapon));
+        Assert.False(PlayerEquipmentRules.CanEquipInHand(
+            leftHandShieldForWizard, PlayerClassId.DarkWizard, PlayerEquipmentSlot.RightWeapon));
+    }
+
     [Theory]
     [InlineData(8, 0, "Player/ArmorMale01.bmd")]
     [InlineData(8, 10, "Player/ArmorElf01.bmd")]
@@ -98,14 +124,16 @@ public sealed class PlayerItemModelResolverTests
         int group,
         int id,
         string name,
-        IReadOnlyList<byte>? requireClass = null) => new(
+        IReadOnlyList<byte>? requireClass = null,
+        bool twoHands = false,
+        int slot = 0) => new(
         (group * 512) + id,
         group,
         id,
         name,
-        false,
+        twoHands,
         0,
-        0,
+        slot,
         0,
         1,
         1,
