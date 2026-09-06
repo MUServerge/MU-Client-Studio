@@ -53,6 +53,35 @@ public sealed class PlayerItemModelResolver
         [31] = "Staff_32"
     };
 
+    // Source/model-table backed names for the wing-capable entries that are present in the
+    // supplied EX603 Local/Item.bmd. Group 12 is mixed content; it cannot use id+1 blindly.
+    private static readonly IReadOnlyDictionary<int, string> WingModels = new Dictionary<int, string>
+    {
+        [0] = "Wing01",
+        [1] = "Wing02",
+        [2] = "Wing03",
+        [3] = "Wing04",
+        [4] = "Wing05",
+        [5] = "Wing06",
+        [6] = "Wing07",
+        [36] = "Wing08",
+        [37] = "Wing09",
+        [38] = "Wing10",
+        [39] = "Wing11",
+        [40] = "DarkLordRobe02",
+        [41] = "Wing42",
+        [42] = "Wing43",
+        [43] = "Wing44",
+        [49] = "Wing50",
+        [50] = "Wing51",
+        [130] = "DarkLordRobe",
+        [131] = "alice1wing",
+        [132] = "elf_wing",
+        [133] = "angel_wing",
+        [134] = "devil_wing",
+        [135] = "Wing50"
+    };
+
     private static readonly int[] RageFighterCommonItemIds = [5, 6, 8, 9];
 
     public PlayerItemModelResolution? Resolve(
@@ -112,10 +141,10 @@ public sealed class PlayerItemModelResolver
             yield break;
         }
 
-        if (slot == PlayerEquipmentSlot.Wings && item.Group == 12)
+        if (slot == PlayerEquipmentSlot.Wings && PlayerEquipmentRules.IsStandardWing(item) &&
+            WingModels.TryGetValue(item.Id, out var wingModel))
         {
-            // Main5.2 registers the classic wing bank as Wing01, Wing02, ... under Data/Item.
-            yield return ItemCandidate(Numbered("Wing", item.Id + 1), "Main5.2 classic wing registration");
+            yield return ItemCandidate(wingModel, "EX603/Main5.2 wing model registration");
         }
     }
 
@@ -214,7 +243,7 @@ public sealed class PlayerItemModelResolver
         };
 
         foreach (var modelName in ResolveClassicBodyModelNames(prefix, slot, item.Id))
-            yield return PlayerCandidate(modelName, "Main5.2 OpenPlayers item registration");
+            yield return PlayerCandidate(modelName, "Main5.2 OpenPlayers/item-model registration");
     }
 
     private static IEnumerable<string> ResolveClassicBodyModelNames(
@@ -318,7 +347,16 @@ public sealed class PlayerItemModelResolver
             yield break;
         }
 
-        if (id is >= 39 and <= 44)
+        // Summoner/common late S6 body banks and the next standard body ranges are directly
+        // numbered in the Main5.2 model table. IDs 45-52 map to *Male46-*Male53.
+        if (id is >= 39 and <= 52)
+        {
+            yield return Numbered(prefix + "Male", id + 1);
+            yield break;
+        }
+
+        // Rage Fighter dedicated S6 sets in the supplied EX603 Item.bmd map to *Male60-62.
+        if (id is >= 59 and <= 61)
             yield return Numbered(prefix + "Male", id + 1);
     }
 
