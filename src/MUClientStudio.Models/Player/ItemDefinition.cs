@@ -47,6 +47,12 @@ public sealed record ItemDefinition(
         : ItemName;
 
     /// <summary>
+    /// Temporary UI compatibility text. It is deliberately not a filename: EX603 Item.bmd has no
+    /// model-path field. Call PlayerItemModelResolver when an actual model path is required.
+    /// </summary>
+    public string ModelPath => "Resolved from group/id at runtime";
+
+    /// <summary>
     /// EX603 Item.bmd stores one requirement byte for each of the seven base classes.
     /// A positive value means the class/evolution chain may use the item. An all-zero vector is
     /// treated as unrestricted because some utility/equipment records do not encode a class gate.
