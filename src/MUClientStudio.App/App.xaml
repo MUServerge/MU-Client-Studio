@@ -18,10 +18,75 @@
             <Setter Property="Foreground" Value="{StaticResource Text}"/>
         </Style>
 
-        <Style x:Key="V6ComboBoxItem" TargetType="ComboBoxItem">
-            <Setter Property="Foreground" Value="#D8E2EE"/>
+        <Style TargetType="ToolTip">
+            <Setter Property="Foreground" Value="#C8D4E2"/>
+            <Setter Property="Background" Value="#0C131C"/>
+            <Setter Property="BorderBrush" Value="#2B3C51"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="8,5"/>
+            <Setter Property="FontFamily" Value="Segoe UI"/>
+            <Setter Property="FontSize" Value="9"/>
+        </Style>
+
+        <Style x:Key="V6DropDownThumb" TargetType="Thumb">
+            <Setter Property="MinHeight" Value="26"/>
+            <Setter Property="Background" Value="#344960"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Thumb">
+                        <Border x:Name="ThumbBorder"
+                                Margin="1,0"
+                                Background="{TemplateBinding Background}"
+                                CornerRadius="3"/>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="ThumbBorder" Property="Background" Value="#48647F"/>
+                            </Trigger>
+                            <Trigger Property="IsDragging" Value="True">
+                                <Setter TargetName="ThumbBorder" Property="Background" Value="#587795"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="V6DropDownScrollBar" TargetType="ScrollBar">
+            <Setter Property="Width" Value="7"/>
             <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="Padding" Value="10,7"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ScrollBar">
+                        <Grid Background="Transparent">
+                            <Track x:Name="PART_Track"
+                                   IsDirectionReversed="True"
+                                   Orientation="{TemplateBinding Orientation}">
+                                <Track.DecreaseRepeatButton>
+                                    <RepeatButton Command="ScrollBar.PageUpCommand"
+                                                  Background="Transparent"
+                                                  Focusable="False"
+                                                  Opacity="0"/>
+                                </Track.DecreaseRepeatButton>
+                                <Track.Thumb>
+                                    <Thumb Style="{StaticResource V6DropDownThumb}"/>
+                                </Track.Thumb>
+                                <Track.IncreaseRepeatButton>
+                                    <RepeatButton Command="ScrollBar.PageDownCommand"
+                                                  Background="Transparent"
+                                                  Focusable="False"
+                                                  Opacity="0"/>
+                                </Track.IncreaseRepeatButton>
+                            </Track>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="V6ComboBoxItem" TargetType="ComboBoxItem">
+            <Setter Property="Foreground" Value="#C8D4E2"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Padding" Value="9,5"/>
             <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
             <Setter Property="SnapsToDevicePixels" Value="True"/>
             <Setter Property="Template">
@@ -32,15 +97,30 @@
                                 CornerRadius="4"
                                 Padding="{TemplateBinding Padding}"
                                 SnapsToDevicePixels="True">
-                            <ContentPresenter VerticalAlignment="Center"/>
+                            <Grid>
+                                <Border x:Name="ItemAccent"
+                                        Width="2"
+                                        Height="12"
+                                        Margin="0,0,7,0"
+                                        HorizontalAlignment="Left"
+                                        VerticalAlignment="Center"
+                                        Background="#6785A6"
+                                        CornerRadius="1"
+                                        Opacity="0"/>
+                                <ContentPresenter Margin="9,0,0,0"
+                                                  VerticalAlignment="Center"/>
+                            </Grid>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsHighlighted" Value="True">
-                                <Setter TargetName="ItemBorder" Property="Background" Value="#142131"/>
-                                <Setter Property="Foreground" Value="White"/>
+                                <Setter TargetName="ItemBorder" Property="Background" Value="#121E2C"/>
+                                <Setter TargetName="ItemAccent" Property="Opacity" Value="0.75"/>
+                                <Setter Property="Foreground" Value="#F2F6FB"/>
                             </Trigger>
                             <Trigger Property="IsSelected" Value="True">
-                                <Setter TargetName="ItemBorder" Property="Background" Value="#18283A"/>
+                                <Setter TargetName="ItemBorder" Property="Background" Value="#172638"/>
+                                <Setter TargetName="ItemAccent" Property="Background" Value="#D2AF69"/>
+                                <Setter TargetName="ItemAccent" Property="Opacity" Value="1"/>
                                 <Setter Property="Foreground" Value="White"/>
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
@@ -73,6 +153,16 @@
                                     BorderThickness="{TemplateBinding BorderThickness}"
                                     CornerRadius="6"/>
 
+                            <Border x:Name="SelectedAccent"
+                                    Width="2"
+                                    Height="12"
+                                    Margin="6,0,0,0"
+                                    HorizontalAlignment="Left"
+                                    VerticalAlignment="Center"
+                                    Background="#607B99"
+                                    CornerRadius="1"
+                                    Opacity="0.35"/>
+
                             <ContentPresenter x:Name="SelectedContent"
                                               Margin="{TemplateBinding Padding}"
                                               HorizontalAlignment="Left"
@@ -87,7 +177,8 @@
                                     HorizontalAlignment="Right"
                                     Background="Transparent"
                                     IsHitTestVisible="False">
-                                <Path Width="8"
+                                <Path x:Name="DropArrow"
+                                      Width="8"
                                       Height="5"
                                       HorizontalAlignment="Center"
                                       VerticalAlignment="Center"
@@ -121,14 +212,17 @@
                                         MinWidth="{TemplateBinding ActualWidth}"
                                         MaxHeight="{TemplateBinding MaxDropDownHeight}"
                                         Margin="0,4,0,0"
-                                        Padding="4"
-                                        Background="#0B1118"
-                                        BorderBrush="#2A3A4E"
+                                        Padding="4,4,2,4"
+                                        Background="#0A1017"
+                                        BorderBrush="#30435A"
                                         BorderThickness="1"
                                         CornerRadius="6">
                                     <ScrollViewer CanContentScroll="True"
                                                   HorizontalScrollBarVisibility="Disabled"
                                                   VerticalScrollBarVisibility="Auto">
+                                        <ScrollViewer.Resources>
+                                            <Style TargetType="ScrollBar" BasedOn="{StaticResource V6DropDownScrollBar}"/>
+                                        </ScrollViewer.Resources>
                                         <ItemsPresenter/>
                                     </ScrollViewer>
                                 </Border>
@@ -136,18 +230,26 @@
                         </Grid>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="OuterBorder" Property="Background" Value="#0C141D"/>
                                 <Setter TargetName="OuterBorder" Property="BorderBrush" Value="#3B516B"/>
+                                <Setter TargetName="SelectedAccent" Property="Opacity" Value="0.7"/>
+                                <Setter TargetName="DropArrow" Property="Stroke" Value="#91A6BD"/>
                             </Trigger>
                             <Trigger Property="IsKeyboardFocusWithin" Value="True">
                                 <Setter TargetName="OuterBorder" Property="BorderBrush" Value="#4C6786"/>
+                                <Setter TargetName="SelectedAccent" Property="Opacity" Value="0.8"/>
                             </Trigger>
                             <Trigger Property="IsDropDownOpen" Value="True">
-                                <Setter TargetName="OuterBorder" Property="Background" Value="#0D151F"/>
-                                <Setter TargetName="OuterBorder" Property="BorderBrush" Value="#49617F"/>
+                                <Setter TargetName="OuterBorder" Property="Background" Value="#0E1722"/>
+                                <Setter TargetName="OuterBorder" Property="BorderBrush" Value="#58718E"/>
+                                <Setter TargetName="SelectedAccent" Property="Background" Value="#D2AF69"/>
+                                <Setter TargetName="SelectedAccent" Property="Opacity" Value="1"/>
+                                <Setter TargetName="DropArrow" Property="Stroke" Value="#D2AF69"/>
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
                                 <Setter Property="Foreground" Value="#536174"/>
-                                <Setter TargetName="OuterBorder" Property="Opacity" Value="0.6"/>
+                                <Setter TargetName="OuterBorder" Property="Opacity" Value="0.56"/>
+                                <Setter TargetName="SelectedAccent" Property="Opacity" Value="0.15"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
