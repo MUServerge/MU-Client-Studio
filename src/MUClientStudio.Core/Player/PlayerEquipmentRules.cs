@@ -8,6 +8,11 @@ namespace MUClientStudio.Core.Player;
 /// </summary>
 public static class PlayerEquipmentRules
 {
+    private const int EquipmentWeaponRight = 0;
+    private const int EquipmentWeaponLeft = 1;
+    private const int ItemStaffBase = 5 * 512;
+    private const int ItemShieldBase = 6 * 512;
+
     private static readonly HashSet<int> StandardWingIds =
     [
         0, 1, 2, 3, 4, 5, 6,
@@ -25,6 +30,40 @@ public static class PlayerEquipmentRules
 
     public static bool IsPlayerEquipment(ItemDefinition item) =>
         IsWeapon(item) || IsBodyEquipment(item) || IsStandardWing(item);
+
+    /// <summary>
+    /// Mirrors the base hand-slot branch in Main5.2 CNewUIMyInventory::IsEquipable.
+    /// Item.bmd Slot 0 is the normal right-hand slot and Slot 1 is the left-hand slot.
+    /// Dark Knight, Magic Gladiator and Rage Fighter may place a one-handed Slot-0 weapon in
+    /// the left hand. Summoner keeps the legacy client exception outside the staff/shield range.
+    /// Class permission itself still comes from Item.bmd RequireClass.
+    /// </summary>
+    public static bool CanEquipInHand(
+        ItemDefinition item,
+        PlayerClassId playerClass,
+        PlayerEquipmentSlot hand)
+    {
+        if (!IsWeapon(item) || !item.SupportsClass(playerClass))
+            return false;
+
+        if (hand == PlayerEquipmentSlot.RightWeapon)
+            return item.Slot == EquipmentWeaponRight;
+
+        if (hand != PlayerEquipmentSlot.LeftWeapon)
+            return false;
+
+        if (item.Slot == EquipmentWeaponLeft)
+            return true;
+
+        if (item.Slot != EquipmentWeaponRight || item.TwoHands)
+            return false;
+
+        if (playerClass is PlayerClassId.DarkKnight or PlayerClassId.MagicGladiator or PlayerClassId.RageFighter)
+            return true;
+
+        return playerClass == PlayerClassId.Summoner &&
+               (item.Index < ItemStaffBase || item.Index > ItemShieldBase);
+    }
 
     public static string GetWeaponGroupName(int group) => group switch
     {
