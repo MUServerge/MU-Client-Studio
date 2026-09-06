@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.IO;
 using System.Windows.Media.Imaging;
 using MUClientStudio.Models.Formats.Bmd;
@@ -39,6 +40,7 @@ public sealed class MuAnimatedPlayerGlRenderer
     private Bounds3 _bounds = Bounds3.Empty;
     private double _playbackSeconds;
     private long _lastAnimationTick = -1;
+    private long _lastRenderTimestamp;
 
     public MuPlayerGlRenderStats Stats { get; private set; } = new(0, 0, 0, 0, 0, 0);
 
@@ -56,6 +58,7 @@ public sealed class MuAnimatedPlayerGlRenderer
         _pendingActionIndex = safeAction;
         _playbackSeconds = 0;
         _lastAnimationTick = -1;
+        _lastRenderTimestamp = 0;
 
         if (characterChanged)
             _zoom = 1f;
@@ -85,6 +88,11 @@ public sealed class MuAnimatedPlayerGlRenderer
         if (pixelWidth <= 0 || pixelHeight <= 0) return;
         EnsureInitialized();
 
+        // GLWpfControl versions have exposed both delta-like and elapsed-like TimeSpan values over
+        // their lifetime. Keep animation timing independent from that contract by preferring an
+        // internal monotonic clock and using the supplied value only as a first-frame fallback.
+        var frameDeltaSeconds = ResolveFrameDelta(deltaSeconds);
+
         if (!ReferenceEquals(_uploadedCharacter, _pendingCharacter) ||
             _uploadedActionIndex != _pendingActionIndex)
         {
@@ -92,7 +100,7 @@ public sealed class MuAnimatedPlayerGlRenderer
         }
         else
         {
-            AdvanceAnimation(deltaSeconds);
+            AdvanceAnimation(frameDeltaSeconds);
         }
 
         GL.Viewport(0, 0, pixelWidth, pixelHeight);
@@ -149,6 +157,23 @@ public sealed class MuAnimatedPlayerGlRenderer
         GL.BindVertexArray(0);
         GL.BindTexture(TextureTarget.Texture2D, 0);
         GL.UseProgram(0);
+    }
+
+    private double ResolveFrameDelta(double suppliedDeltaSeconds)
+    {
+        var now = Stopwatch.GetTimestamp();
+        var measuredDelta = _lastRenderTimestamp == 0
+            ? double.NaN
+            : (now - _lastRenderTimestamp) / (double)Stopwatch.Frequency;
+        _lastRenderTimestamp = now;
+
+        if (double.IsFinite(measuredDelta) && measuredDelta > 0 && measuredDelta <= 0.25)
+            return Math.Min(measuredDelta, 0.1);
+
+        if (double.IsFinite(suppliedDeltaSeconds) && suppliedDeltaSeconds > 0 && suppliedDeltaSeconds <= 0.25)
+            return Math.Min(suppliedDeltaSeconds, 0.1);
+
+        return 1.0 / 60.0;
     }
 
     private void EnsureInitialized()
