@@ -59,6 +59,27 @@ public sealed class PlayerItemModelResolverTests
         Assert.DoesNotContain(candidates, path => path.StartsWith("Player/", StringComparison.OrdinalIgnoreCase));
     }
 
+    [Theory]
+    [InlineData(4, 8, "Item/Crossbow01.bmd", "Item/Bow09.bmd")]
+    [InlineData(4, 15, "Item/arrows02.bmd", "Item/Bow16.bmd")]
+    [InlineData(3, 12, "Item/MagmaSpear.bmd", "Item/Spear13.bmd")]
+    [InlineData(6, 21, "Item/crosssheild.bmd", "Item/Shield22.bmd")]
+    [InlineData(0, 29, "Item/balhalla_sword.bmd", "Item/Sword30.bmd")]
+    public void SpecialWeaponRouting_UsesExactRegisteredModelOnly(
+        int group,
+        int id,
+        string expectedPath,
+        string wrongGenericPath)
+    {
+        var resolver = new PlayerItemModelResolver();
+        var item = Item(group, id, $"Special {group}:{id}");
+
+        var candidates = resolver.GetCandidatePaths(DarkWizard, PlayerEquipmentSlot.RightWeapon, item);
+
+        Assert.Contains(expectedPath, candidates, StringComparer.OrdinalIgnoreCase);
+        Assert.DoesNotContain(wrongGenericPath, candidates, StringComparer.OrdinalIgnoreCase);
+    }
+
     [Fact]
     public void HandRules_UseItemBmdSlotAndClientDualWieldRules()
     {
