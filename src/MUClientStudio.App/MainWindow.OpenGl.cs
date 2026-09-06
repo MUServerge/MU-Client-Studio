@@ -15,10 +15,12 @@ public partial class MainWindow
 {
     private readonly MuAnimatedPlayerGlRenderer _openGlPlayerRenderer = new();
     private GLWpfControl? _openGlPlayerControl;
+    private Grid? _openGlInputHost;
     private bool _openGlViewportInitialized;
     private bool _openGlViewportFailed;
     private PlayerCharacterSource? _openGlCharacter;
     private int _openGlActionIndex = -1;
+    private int _openGlPreferredActionIndex = -1;
     private MuPlayerGlRenderStats? _openGlLastStats;
     private Point _openGlLastMousePoint;
     private bool _openGlOrbiting;
@@ -49,11 +51,16 @@ public partial class MainWindow
             };
 
             control.Render += OpenGlPlayerControl_Render;
-            control.MouseWheel += OpenGlPlayerControl_MouseWheel;
-            control.MouseLeftButtonDown += OpenGlPlayerControl_MouseLeftButtonDown;
-            control.MouseLeftButtonUp += OpenGlPlayerControl_MouseLeftButtonUp;
-            control.MouseMove += OpenGlPlayerControl_MouseMove;
-            control.MouseRightButtonDown += OpenGlPlayerControl_MouseRightButtonDown;
+
+            // Route interaction through the WPF viewport host rather than the GL child itself.
+            // This remains reliable even when WPF overlays are present over the OpenGL surface.
+            host.Focusable = true;
+            host.PreviewMouseWheel += OpenGlPlayerControl_MouseWheel;
+            host.PreviewMouseLeftButtonDown += OpenGlPlayerControl_MouseLeftButtonDown;
+            host.PreviewMouseLeftButtonUp += OpenGlPlayerControl_MouseLeftButtonUp;
+            host.PreviewMouseMove += OpenGlPlayerControl_MouseMove;
+            host.PreviewMouseRightButtonDown += OpenGlPlayerControl_MouseRightButtonDown;
+            _openGlInputHost = host;
 
             Grid.SetRow(control, Grid.GetRow(PlayerViewport));
             Grid.SetColumn(control, Grid.GetColumn(PlayerViewport));
@@ -90,9 +97,9 @@ public partial class MainWindow
             }
 
             UpdateOpenGlEquipmentSelectors();
-            _openGlPlayerRenderer.SetCharacter(
-                _currentCharacter,
-                AnimationCombo.SelectedIndex >= 0 ? AnimationCombo.SelectedIndex : 0);
+            var initialAction = ResolveOpenGlActionIndex(_currentCharacter);
+            SetAnimationComboWithoutNotification(initialAction);
+            _openGlPlayerRenderer.SetCharacter(_currentCharacter, initialAction);
         }
         catch (Exception ex)
         {
@@ -117,7 +124,10 @@ public partial class MainWindow
                 UpdateOpenGlEquipmentSelectors();
             }
 
-            var actionIndex = AnimationCombo.SelectedIndex >= 0 ? AnimationCombo.SelectedIndex : 0;
+            var actionIndex = ResolveOpenGlActionIndex(_currentCharacter);
+            if (_currentCharacter is not null && AnimationCombo.SelectedIndex != actionIndex)
+                SetAnimationComboWithoutNotification(actionIndex);
+
             if (!ReferenceEquals(_openGlCharacter, _currentCharacter) || _openGlActionIndex != actionIndex)
             {
                 _openGlCharacter = _currentCharacter;
@@ -134,8 +144,9 @@ public partial class MainWindow
             if (!Equals(_openGlLastStats, stats) && _currentCharacter is not null)
             {
                 _openGlLastStats = stats;
+                var frameCount = GetActionFrameCount(_currentCharacter, actionIndex);
                 ViewportStatusText.Text =
-                    $"OpenGL • 24 FPS • {stats.BodyParts} body parts • {stats.Attachments} attachments • {stats.Triangles:N0} triangles • drag to rotate";
+                    $"OpenGL • Action {actionIndex:D3} • {frameCount} frames • {stats.BodyParts} body parts • {stats.Attachments} attachments • {stats.Triangles:N0} triangles • drag to rotate";
             }
         }
         catch (Exception ex)
@@ -168,10 +179,12 @@ public partial class MainWindow
             return;
 
         var actionIndex = AnimationCombo.SelectedIndex;
+        _openGlPreferredActionIndex = actionIndex;
         _openGlPlayerRenderer.SetCharacter(_currentCharacter, actionIndex);
         _openGlActionIndex = actionIndex;
-        ViewportStatusText.Text = $"Action {actionIndex:D3} • playing at {PlayerProfile.AnimationFps} FPS";
-        AnimationSummaryText.Text = $"Action {actionIndex:D3} • Player/player.bmd • {PlayerProfile.AnimationFps} FPS";
+        var frameCount = GetActionFrameCount(_currentCharacter, actionIndex);
+        ViewportStatusText.Text = $"Action {actionIndex:D3} • {frameCount} frames • playing at {PlayerProfile.AnimationFps} FPS";
+        AnimationSummaryText.Text = $"Action {actionIndex:D3} • {frameCount} frames • Player/player.bmd • {PlayerProfile.AnimationFps} FPS";
     }
 
     private async void OpenGlEquipmentCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -358,6 +371,48 @@ public partial class MainWindow
     private static bool IsHandSlot(PlayerEquipmentSlot slot) =>
         slot is PlayerEquipmentSlot.LeftWeapon or PlayerEquipmentSlot.RightWeapon;
 
+    private int ResolveOpenGlActionIndex(PlayerCharacterSource? character)
+    {
+        if (character is null || character.ActionCount <= 0)
+            return 0;
+
+        if (_openGlPreferredActionIndex >= 0 && _openGlPreferredActionIndex < character.ActionCount)
+            return _openGlPreferredActionIndex;
+
+        // Main5.2/Xulek Player preview starts on the first real animated clip rather than action 0,
+        // which is commonly a one-frame bind/static action.
+        for (var actionIndex = 0; actionIndex < character.AnimationDocument.Actions.Count; actionIndex++)
+        {
+            if (character.AnimationDocument.Actions[actionIndex].AnimationKeyCount > 1)
+                return actionIndex;
+        }
+
+        return 0;
+    }
+
+    private static int GetActionFrameCount(PlayerCharacterSource character, int actionIndex)
+    {
+        if (actionIndex < 0 || actionIndex >= character.AnimationDocument.Actions.Count)
+            return 0;
+        return Math.Max(0, (int)character.AnimationDocument.Actions[actionIndex].AnimationKeyCount);
+    }
+
+    private void SetAnimationComboWithoutNotification(int actionIndex)
+    {
+        if (AnimationCombo.Items.Count == 0 || actionIndex < 0 || actionIndex >= AnimationCombo.Items.Count)
+            return;
+
+        _suppressAnimationSelection = true;
+        try
+        {
+            AnimationCombo.SelectedIndex = actionIndex;
+        }
+        finally
+        {
+            _suppressAnimationSelection = false;
+        }
+    }
+
     private void OpenGlPlayerControl_MouseWheel(object sender, MouseWheelEventArgs e)
     {
         _openGlPlayerRenderer.Zoom(e.Delta);
@@ -366,28 +421,30 @@ public partial class MainWindow
 
     private void OpenGlPlayerControl_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
-        if (_openGlPlayerControl is null) return;
+        if (_openGlInputHost is null) return;
         _openGlOrbiting = true;
-        _openGlLastMousePoint = e.GetPosition(_openGlPlayerControl);
-        _openGlPlayerControl.CaptureMouse();
-        _openGlPlayerControl.Cursor = Cursors.SizeAll;
+        _openGlLastMousePoint = e.GetPosition(_openGlInputHost);
+        _openGlInputHost.CaptureMouse();
+        _openGlInputHost.Cursor = Cursors.SizeAll;
+        _openGlInputHost.Focus();
         e.Handled = true;
     }
 
     private void OpenGlPlayerControl_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
     {
-        if (_openGlPlayerControl is null) return;
+        if (_openGlInputHost is null) return;
         _openGlOrbiting = false;
-        _openGlPlayerControl.ReleaseMouseCapture();
-        _openGlPlayerControl.Cursor = Cursors.Arrow;
+        if (_openGlInputHost.IsMouseCaptured)
+            _openGlInputHost.ReleaseMouseCapture();
+        _openGlInputHost.Cursor = Cursors.Arrow;
         e.Handled = true;
     }
 
     private void OpenGlPlayerControl_MouseMove(object sender, MouseEventArgs e)
     {
-        if (!_openGlOrbiting || _openGlPlayerControl is null) return;
+        if (!_openGlOrbiting || _openGlInputHost is null) return;
 
-        var point = e.GetPosition(_openGlPlayerControl);
+        var point = e.GetPosition(_openGlInputHost);
         var delta = point - _openGlLastMousePoint;
         _openGlLastMousePoint = point;
         _openGlPlayerRenderer.Rotate((float)delta.X, (float)delta.Y);
