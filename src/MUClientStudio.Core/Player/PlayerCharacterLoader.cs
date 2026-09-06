@@ -10,22 +10,25 @@ public sealed class PlayerCharacterLoader
 {
     private readonly BmdReader _bmdReader;
     private readonly MuTextureLoader _textureLoader;
-    private readonly ItemBmdReader _itemBmdReader;
+    private readonly PlayerItemCatalogLoader _itemCatalogLoader;
+    private readonly PlayerItemModelResolver _itemModelResolver;
 
     public PlayerCharacterLoader(
         BmdReader? bmdReader = null,
         MuTextureLoader? textureLoader = null,
-        ItemBmdReader? itemBmdReader = null)
+        PlayerItemCatalogLoader? itemCatalogLoader = null,
+        PlayerItemModelResolver? itemModelResolver = null)
     {
         _bmdReader = bmdReader ?? new BmdReader();
         _textureLoader = textureLoader ?? new MuTextureLoader();
-        _itemBmdReader = itemBmdReader ?? new ItemBmdReader();
+        _itemCatalogLoader = itemCatalogLoader ?? new PlayerItemCatalogLoader();
+        _itemModelResolver = itemModelResolver ?? new PlayerItemModelResolver();
     }
 
     public Task<ItemCatalog> LoadItemCatalogAsync(
         string dataRoot,
         CancellationToken cancellationToken = default) =>
-        _itemBmdReader.ReadAsync(dataRoot, cancellationToken);
+        _itemCatalogLoader.LoadAsync(dataRoot, cancellationToken);
 
     public Task<PlayerCharacterSource> LoadBaseCharacterAsync(
         string dataRoot,
@@ -59,11 +62,11 @@ public sealed class PlayerCharacterLoader
 
         var partDefinitions = new[]
         {
-            new BodyPartDefinition("Armor", definition.BaseArmorModelPath, loadout.Armor, 8, true),
-            new BodyPartDefinition("Helm", definition.BaseHelmModelPath, loadout.Helm, 7, false),
-            new BodyPartDefinition("Pants", definition.BasePantsModelPath, loadout.Pants, 9, false),
-            new BodyPartDefinition("Gloves", definition.BaseGlovesModelPath, loadout.Gloves, 10, false),
-            new BodyPartDefinition("Boots", definition.BaseBootsModelPath, loadout.Boots, 11, false)
+            new BodyPartDefinition(PlayerEquipmentSlot.Armor, "Armor", definition.BaseArmorModelPath, loadout.Armor, 8, true),
+            new BodyPartDefinition(PlayerEquipmentSlot.Helm, "Helm", definition.BaseHelmModelPath, loadout.Helm, 7, false),
+            new BodyPartDefinition(PlayerEquipmentSlot.Pants, "Pants", definition.BasePantsModelPath, loadout.Pants, 9, false),
+            new BodyPartDefinition(PlayerEquipmentSlot.Gloves, "Gloves", definition.BaseGlovesModelPath, loadout.Gloves, 10, false),
+            new BodyPartDefinition(PlayerEquipmentSlot.Boots, "Boots", definition.BaseBootsModelPath, loadout.Boots, 11, false)
         };
 
         foreach (var part in partDefinitions)
@@ -73,7 +76,7 @@ public sealed class PlayerCharacterLoader
             if (part.EquipmentItem is not null && part.EquipmentItem.Group != part.ExpectedGroup)
             {
                 diagnostics.Add(
-                    $"Ignored {part.Slot} item {part.EquipmentItem.Key}: expected group {part.ExpectedGroup}.");
+                    $"Ignored {part.Label} item {part.EquipmentItem.Key}: expected group {part.ExpectedGroup}.");
             }
 
             var equipment = part.EquipmentItem is not null && part.EquipmentItem.Group == part.ExpectedGroup
@@ -82,15 +85,18 @@ public sealed class PlayerCharacterLoader
 
             if (equipment is not null)
             {
-                var resolvedEquipmentPath = ResolveBodyEquipmentPath(dataRoot, equipment);
-                if (resolvedEquipmentPath is not null)
+                var resolution = _itemModelResolver.Resolve(dataRoot, definition, part.Slot, equipment);
+                if (resolution is not null)
                 {
+                    diagnostics.Add(
+                        $"Resolved {part.Label} {equipment.Key} -> {resolution.RelativePath} ({resolution.Evidence}).");
+
                     var equipmentPart = await LoadBodyPartAsync(
                         dataRoot,
                         definition,
-                        part.Slot,
-                        resolvedEquipmentPath.Value.RelativePath,
-                        resolvedEquipmentPath.Value.FullPath,
+                        part.Label,
+                        resolution.RelativePath,
+                        resolution.FullPath,
                         equipment,
                         diagnostics,
                         cancellationToken).ConfigureAwait(false);
@@ -98,15 +104,17 @@ public sealed class PlayerCharacterLoader
                     if (equipmentPart.Document.BoneCount != skeletonDocument.BoneCount)
                     {
                         diagnostics.Add(
-                            $"{part.Slot} {equipment.Key} bone count ({equipmentPart.Document.BoneCount}) differs from base skeleton ({skeletonDocument.BoneCount}).");
+                            $"{part.Label} {equipment.Key} bone count ({equipmentPart.Document.BoneCount}) differs from base skeleton ({skeletonDocument.BoneCount}).");
                     }
 
                     bodyParts.Add(equipmentPart);
                     continue;
                 }
 
-                diagnostics.Add(
-                    $"Equipment model missing for {part.Slot}: {equipment.DisplayName} ({equipment.ModelPath}). Using base body part.");
+                var candidates = _itemModelResolver.GetCandidatePaths(definition, part.Slot, equipment);
+                diagnostics.Add(candidates.Count == 0
+                    ? $"No verified model rule exists yet for {part.Label} {equipment.DisplayName} [{equipment.Key}]. Using base body part."
+                    : $"Equipment model missing for {part.Label} {equipment.DisplayName} [{equipment.Key}]. Checked: {string.Join(", ", candidates)}. Using base body part.");
             }
 
             var baseFullPath = ResolveDataPath(dataRoot, part.BaseRelativePath);
@@ -119,7 +127,7 @@ public sealed class PlayerCharacterLoader
                 continue;
             }
 
-            if (part.Slot == "Armor")
+            if (part.Slot == PlayerEquipmentSlot.Armor)
             {
                 var textures = await LoadTexturesAsync(
                     dataRoot,
@@ -128,14 +136,14 @@ public sealed class PlayerCharacterLoader
                     part.BaseRelativePath,
                     diagnostics,
                     cancellationToken).ConfigureAwait(false);
-                bodyParts.Add(new PlayerBodyPartSource(part.Slot, part.BaseRelativePath, skeletonDocument, textures));
+                bodyParts.Add(new PlayerBodyPartSource(part.Label, part.BaseRelativePath, skeletonDocument, textures));
             }
             else
             {
                 bodyParts.Add(await LoadBodyPartAsync(
                     dataRoot,
                     definition,
-                    part.Slot,
+                    part.Label,
                     part.BaseRelativePath,
                     baseFullPath,
                     null,
@@ -169,6 +177,7 @@ public sealed class PlayerCharacterLoader
         await TryLoadAttachmentAsync(
             dataRoot,
             definition,
+            PlayerEquipmentSlot.LeftWeapon,
             "Left Weapon",
             loadout.LeftWeapon,
             item => item.Group is >= 0 and <= 6,
@@ -179,6 +188,7 @@ public sealed class PlayerCharacterLoader
         await TryLoadAttachmentAsync(
             dataRoot,
             definition,
+            PlayerEquipmentSlot.RightWeapon,
             "Right Weapon",
             loadout.RightWeapon,
             item => item.Group is >= 0 and <= 6,
@@ -189,6 +199,7 @@ public sealed class PlayerCharacterLoader
         await TryLoadAttachmentAsync(
             dataRoot,
             definition,
+            PlayerEquipmentSlot.Wings,
             "Wings",
             loadout.Wings,
             item => item.Group == 12,
@@ -232,7 +243,8 @@ public sealed class PlayerCharacterLoader
     private async Task TryLoadAttachmentAsync(
         string dataRoot,
         PlayerClassDefinition definition,
-        string slot,
+        PlayerEquipmentSlot equipmentSlot,
+        string label,
         ItemDefinition? item,
         Func<ItemDefinition, bool> isValid,
         int attachBoneIndex,
@@ -243,31 +255,36 @@ public sealed class PlayerCharacterLoader
         if (item is null) return;
         if (!isValid(item))
         {
-            diagnostics.Add($"Ignored {slot} item {item.Key}: item group does not match the slot.");
+            diagnostics.Add($"Ignored {label} item {item.Key}: item group does not match the slot.");
             return;
         }
 
-        var resolved = ResolveAttachmentPath(dataRoot, item);
-        if (resolved is null)
+        var resolution = _itemModelResolver.Resolve(dataRoot, definition, equipmentSlot, item);
+        if (resolution is null)
         {
-            diagnostics.Add($"Attachment model missing for {slot}: {item.DisplayName} ({item.ModelPath}).");
+            var candidates = _itemModelResolver.GetCandidatePaths(definition, equipmentSlot, item);
+            diagnostics.Add(candidates.Count == 0
+                ? $"No verified model rule exists yet for {label} {item.DisplayName} [{item.Key}]."
+                : $"Attachment model missing for {label} {item.DisplayName} [{item.Key}]. Checked: {string.Join(", ", candidates)}.");
             return;
         }
+
+        diagnostics.Add($"Resolved {label} {item.Key} -> {resolution.RelativePath} ({resolution.Evidence}).");
 
         try
         {
-            var document = await _bmdReader.ReadAsync(resolved.Value.FullPath, cancellationToken).ConfigureAwait(false);
+            var document = await _bmdReader.ReadAsync(resolution.FullPath, cancellationToken).ConfigureAwait(false);
             var textures = await LoadTexturesAsync(
                 dataRoot,
                 definition,
                 document,
-                resolved.Value.RelativePath,
+                resolution.RelativePath,
                 diagnostics,
                 cancellationToken).ConfigureAwait(false);
 
             attachments.Add(new PlayerAttachmentSource(
-                slot,
-                resolved.Value.RelativePath,
+                label,
+                resolution.RelativePath,
                 document,
                 textures,
                 item,
@@ -275,7 +292,7 @@ public sealed class PlayerCharacterLoader
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
         {
-            diagnostics.Add($"Failed to load {slot} {item.DisplayName}: {ex.Message}");
+            diagnostics.Add($"Failed to load {label} {item.DisplayName}: {ex.Message}");
         }
     }
 
@@ -314,62 +331,6 @@ public sealed class PlayerCharacterLoader
         return textures;
     }
 
-    private static (string RelativePath, string FullPath)? ResolveBodyEquipmentPath(
-        string dataRoot,
-        ItemDefinition item)
-    {
-        var normalized = NormalizeRelativePath(item.ModelPath);
-        if (string.IsNullOrWhiteSpace(normalized)) return null;
-        normalized = EnsureBmdExtension(normalized);
-
-        var candidates = new List<string>();
-        if (normalized.StartsWith("Item/", StringComparison.OrdinalIgnoreCase))
-            candidates.Add("Player/" + normalized[5..]);
-
-        candidates.Add(normalized);
-
-        foreach (var relative in candidates.Distinct(StringComparer.OrdinalIgnoreCase))
-        {
-            var full = ResolveDataPath(dataRoot, relative);
-            if (File.Exists(full))
-                return (relative, full);
-        }
-
-        return null;
-    }
-
-    private static (string RelativePath, string FullPath)? ResolveAttachmentPath(
-        string dataRoot,
-        ItemDefinition item)
-    {
-        var normalized = NormalizeRelativePath(item.ModelPath);
-        if (string.IsNullOrWhiteSpace(normalized)) return null;
-        normalized = EnsureBmdExtension(normalized);
-
-        var candidates = new List<string> { normalized };
-        if (normalized.StartsWith("Item/", StringComparison.OrdinalIgnoreCase))
-            candidates.Add("Player/" + normalized[5..]);
-        else if (normalized.StartsWith("Player/", StringComparison.OrdinalIgnoreCase))
-            candidates.Add("Item/" + normalized[7..]);
-        else
-        {
-            candidates.Add("Item/" + normalized);
-            candidates.Add("Player/" + normalized);
-        }
-
-        foreach (var relative in candidates.Distinct(StringComparer.OrdinalIgnoreCase))
-        {
-            var full = ResolveDataPath(dataRoot, relative);
-            if (File.Exists(full))
-                return (relative, full);
-        }
-
-        return null;
-    }
-
-    private static string EnsureBmdExtension(string path) =>
-        path.EndsWith(".bmd", StringComparison.OrdinalIgnoreCase) ? path : path + ".bmd";
-
     private static string NormalizeRelativePath(string relativePath)
     {
         var normalized = relativePath.Replace('\\', '/').TrimStart('/');
@@ -386,7 +347,8 @@ public sealed class PlayerCharacterLoader
     }
 
     private sealed record BodyPartDefinition(
-        string Slot,
+        PlayerEquipmentSlot Slot,
+        string Label,
         string BaseRelativePath,
         ItemDefinition? EquipmentItem,
         int ExpectedGroup,
