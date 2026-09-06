@@ -2,6 +2,7 @@ using MUClientStudio.Core.Formats.LocalBmd;
 using MUClientStudio.Core.Formats.World;
 using MUClientStudio.Models.Formats.LocalBmd;
 using MUClientStudio.Models.Formats.World;
+using Xunit;
 
 namespace MUClientStudio.Core.Tests;
 
