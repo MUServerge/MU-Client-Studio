@@ -45,6 +45,20 @@ public sealed record ItemDefinition(
     public string DisplayName => string.IsNullOrWhiteSpace(ItemName)
         ? $"Item {Group}:{Id}"
         : ItemName;
+
+    /// <summary>
+    /// EX603 Item.bmd stores one requirement byte for each of the seven base classes.
+    /// A positive value means the class/evolution chain may use the item. An all-zero vector is
+    /// treated as unrestricted because some utility/equipment records do not encode a class gate.
+    /// </summary>
+    public bool SupportsClass(PlayerClassId playerClass)
+    {
+        if (RequireClass.Count == 0 || RequireClass.All(value => value == 0))
+            return true;
+
+        var index = (int)playerClass;
+        return index >= 0 && index < RequireClass.Count && RequireClass[index] > 0;
+    }
 }
 
 public sealed class ItemCatalog
