@@ -18,7 +18,7 @@ This document defines the implementation boundary before additional Player funct
 
 MU Client Studio is an **offline native Windows editor**, not an injected MU client and not a browser viewer port.
 
-Main_EX603 is therefore used to recover the target client's semantics, configuration rules, model routing and Player behavior. Its hard-coded executable addresses, hooks and process patching are not part of Studio's architecture.
+Main_EX603 is therefore used to recover the target client's semantics, model routing and Player behavior. Its hard-coded executable addresses, hooks, process patching and server-distribution custom systems are not part of Studio's architecture.
 
 The Player pipeline is split into four responsibilities:
 
@@ -67,7 +67,7 @@ Owns:
 - BMD reader/decryption/validation
 - texture decoders
 - `Local/item.bmd` catalog loading
-- EX603 custom configuration loaders needed by Player
+- source-backed Player data loaders required by the base client
 - Player definition catalog
 - Player session/document state
 - character assembly coordinator
@@ -239,7 +239,7 @@ Do not perform an unrestricted recursive texture search every frame/build.
 
 ### Item catalog
 
-`Data/Local/item.bmd` is the normal item/model catalog for Player equipment selection.
+`Data/Local/item.bmd` is the normal item metadata catalog for Player equipment selection.
 
 UI selections carry `ItemId`, never an invented model filename.
 
@@ -248,25 +248,21 @@ UI selections carry `ItemId`, never an invented model filename.
 Main_EX603 establishes:
 
 - groups 7–11 body equipment: `Data/Player` primary
-- wings: `Data/Item` primary
+- standard wings: `Data/Item` primary
 - other items: `Data/Item` primary
 
 Compatibility resolver:
 
 - groups 7–11: Player -> Item
-- other groups including wings: Item -> Player
+- other groups including standard wings: Item -> Player
 
 Every fallback is observable through diagnostics so incorrect client data can be identified instead of hidden.
 
-### Custom wings
+### Server-specific extensions are out of scope
 
-Custom wing resolution is a separate source-backed service:
+`CustomWing`, `CUSTOM_WING_INFO`, custom wing effect tables and similar server-distribution additions are **not part of MU Client Studio Player scope**.
 
-`ItemIndex -> CustomWingDefinition`
-
-Definition contains the EX603 data required by Player, including model name/type and effect configuration.
-
-Never infer `ModelType`, glow/effect behavior or model name from a filename convention.
+The editor targets the base client Player data and standard client equipment/wings. Do not add `CustomWingDefinition`, `main.premium/main.free` custom-wing decoding, or server-addon effect configuration to the Player pipeline unless the project scope is explicitly changed later.
 
 ---
 
@@ -301,7 +297,7 @@ Input:
 - `PlayerClassId`
 - `PlayerLoadout`
 - current action/speed
-- resolved item/custom-wing definitions
+- resolved item definitions
 - decoded model assets
 
 Output:
@@ -324,11 +320,10 @@ Output:
 6. Replace the matching base body part and rebind equipped skinned meshes to the same skeleton.
 7. Resolve left weapon and attach to BMD bone 33.
 8. Resolve right weapon and attach to BMD bone 42.
-9. Resolve wings and attach to BMD bone 47.
-10. Resolve custom wing model/effect configuration where applicable.
-11. Bind the Player action bank to the body skeleton.
-12. Create independent attachment animation players for animated weapon/wing models.
-13. Submit one coherent assembly revision to the renderer.
+9. Resolve standard wings and attach to BMD bone 47.
+10. Bind the Player action bank to the body skeleton.
+11. Create independent attachment animation players for animated weapon/wing models.
+12. Submit one coherent assembly revision to the renderer.
 
 A build is not partially swapped into the viewport. The previous valid character remains until the new assembly is ready, then the renderer atomically replaces the scene revision.
 
@@ -404,7 +399,7 @@ Minimum render features required for Player completion:
 - texture sampling with correct UV orientation
 - alpha/blend modes needed by Player assets
 - item level/excellent/ancient rendering only when source behavior is verified
-- wing static/dynamic effects from EX603 configuration
+- standard client wing rendering required by the base Data
 - orbit/pan/zoom camera
 - deterministic viewport resize
 - skeleton/bone debug overlay
@@ -469,7 +464,6 @@ Use typed diagnostics such as:
 - skeleton missing
 - skeleton/body-part mismatch
 - attachment bone missing
-- custom wing config missing/inconsistent
 - renderer resource/device failure
 
 Fatal errors prevent the new assembly revision from replacing the last valid scene.
@@ -499,9 +493,9 @@ Player presentation is split into focused views/view-models:
 - `PlayerInspectorView`
 - `PlayerDiagnosticsView`
 
-The central viewport remains the dominant workspace. Equipment/animation controls are compact tool surfaces around it, not giant dashboard cards.
+The central viewport remains the dominant workspace. Equipment is presented as compact selectors/tool fields, not large inventory-shaped cards or dashboard tiles.
 
-No Player state is populated by directly mutating TextBlocks/ComboBoxes from `MainWindow.xaml.cs`.
+No Player state is populated by directly mutating TextBlocks/ComboBoxes from `MainWindow.xaml.cs` in the final architecture; the current code-behind remains an incremental scaffold until the ViewModel split is complete.
 
 ---
 
@@ -546,7 +540,6 @@ They should be replaced incrementally; there is no requirement to preserve their
 - texture decoders + tests
 - item catalog loader
 - deterministic model resolver
-- custom wing definition/effect loaders required by Player
 
 ### Phase 3 — character assembly without final effects
 
@@ -554,7 +547,7 @@ They should be replaced incrementally; there is no requirement to preserve their
 - base body parts
 - equipped body-part replacement/rebinding
 - left/right weapon attachment
-- wing attachment
+- standard wing attachment
 - stable BMD bone-index mapping
 
 ### Phase 4 — animation
@@ -570,7 +563,7 @@ They should be replaced incrementally; there is no requirement to preserve their
 - final GPU backend
 - materials/blending
 - item level/excellent/ancient rendering where verified
-- EX603 custom-wing effects
+- standard client wing rendering
 - camera and debug overlays
 
 Introduce the optional native C++ renderer only here if fidelity/performance evidence justifies it.
@@ -578,7 +571,7 @@ Introduce the optional native C++ renderer only here if fidelity/performance evi
 ### Phase 6 — Player UX completion
 
 - complete V6 Compact Player workspace
-- equipment browser/filtering
+- compact equipment selectors and filtering
 - animation controls
 - inspector and diagnostics
 - refresh/reload behavior
@@ -588,7 +581,7 @@ Introduce the optional native C++ renderer only here if fidelity/performance evi
 
 Player is complete only when representative real EX603 client Data can reliably execute:
 
-`Open Client -> choose every supported base class -> load base body -> equip armor -> equip both weapons -> equip standard/custom wings -> switch actions -> inspect source data -> refresh/reopen client`
+`Open Client -> choose every supported base class -> load base body -> equip armor -> equip both weapons -> equip standard wings -> switch actions -> inspect source data -> refresh/reopen client`
 
 with no stale loads, no guessed source behavior and no UI-thread stalls.
 
