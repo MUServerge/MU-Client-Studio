@@ -83,6 +83,39 @@
             </Setter>
         </Style>
 
+        <DataTemplate x:Key="EquipmentChoiceTemplate">
+            <Grid MinWidth="120">
+                <TextBlock x:Name="EmptyChoice"
+                           Text="{Binding Label}"
+                           Foreground="#8D9AAD"
+                           TextTrimming="CharacterEllipsis"
+                           VerticalAlignment="Center"
+                           Visibility="Collapsed"/>
+                <Grid x:Name="ItemChoice">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="{Binding Item.DisplayName}"
+                               Foreground="{Binding RelativeSource={RelativeSource AncestorType=ComboBoxItem}, Path=Foreground}"
+                               TextTrimming="CharacterEllipsis"
+                               VerticalAlignment="Center"/>
+                    <TextBlock Grid.Column="1"
+                               Margin="10,0,0,0"
+                               Text="{Binding Item.Key}"
+                               Foreground="#586B82"
+                               FontSize="8"
+                               VerticalAlignment="Center"/>
+                </Grid>
+            </Grid>
+            <DataTemplate.Triggers>
+                <DataTrigger Binding="{Binding Item}" Value="{x:Null}">
+                    <Setter TargetName="EmptyChoice" Property="Visibility" Value="Visible"/>
+                    <Setter TargetName="ItemChoice" Property="Visibility" Value="Collapsed"/>
+                </DataTrigger>
+            </DataTemplate.Triggers>
+        </DataTemplate>
+
         <Style x:Key="V6ComboBoxItem" TargetType="ComboBoxItem">
             <Setter Property="Foreground" Value="#C8D4E2"/>
             <Setter Property="Background" Value="Transparent"/>
@@ -255,6 +288,16 @@
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
+            <Style.Triggers>
+                <Trigger Property="Tag" Value="Helm"><Setter Property="ItemTemplate" Value="{StaticResource EquipmentChoiceTemplate}"/></Trigger>
+                <Trigger Property="Tag" Value="Armor"><Setter Property="ItemTemplate" Value="{StaticResource EquipmentChoiceTemplate}"/></Trigger>
+                <Trigger Property="Tag" Value="Pants"><Setter Property="ItemTemplate" Value="{StaticResource EquipmentChoiceTemplate}"/></Trigger>
+                <Trigger Property="Tag" Value="Gloves"><Setter Property="ItemTemplate" Value="{StaticResource EquipmentChoiceTemplate}"/></Trigger>
+                <Trigger Property="Tag" Value="Boots"><Setter Property="ItemTemplate" Value="{StaticResource EquipmentChoiceTemplate}"/></Trigger>
+                <Trigger Property="Tag" Value="LeftWeapon"><Setter Property="ItemTemplate" Value="{StaticResource EquipmentChoiceTemplate}"/></Trigger>
+                <Trigger Property="Tag" Value="RightWeapon"><Setter Property="ItemTemplate" Value="{StaticResource EquipmentChoiceTemplate}"/></Trigger>
+                <Trigger Property="Tag" Value="Wings"><Setter Property="ItemTemplate" Value="{StaticResource EquipmentChoiceTemplate}"/></Trigger>
+            </Style.Triggers>
         </Style>
 
         <Style x:Key="NavButton" TargetType="Button">
