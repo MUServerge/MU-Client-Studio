@@ -27,30 +27,96 @@ public sealed class PlayerItemModelResolver
         [26] = "Sword_27",
         [27] = "Sword_28",
         [28] = "Sword_29",
-        [31] = "Sword32"
+        [29] = "balhalla_sword",
+        [30] = "asura",
+        [31] = "sword32",
+        [36] = "balhalla_sword",
+        [37] = "blastbreak"
     };
 
     private static readonly IReadOnlyDictionary<int, string> MaceOverrides = new Dictionary<int, string>
     {
+        [13] = "saint",
         [14] = "HDK_Mace",
         [15] = "CW_Mace",
         [16] = "Mace_17",
-        [17] = "Mace_18"
+        [17] = "Mace_18",
+        [18] = "gamble_safter01",
+        [19] = "thunder_bolt",
+        [20] = "hornofsteel"
+    };
+
+    private static readonly IReadOnlyDictionary<int, string> SpearOverrides = new Dictionary<int, string>
+    {
+        [11] = "gamble_scyder01",
+        [12] = "MagmaSpear",
+        [13] = "RapideLance",
+        [14] = "ConmocionLance",
+        [15] = "PlumaLance",
+        [16] = "VisLance",
+        [17] = "PrickleLance",
+        [18] = "AlacranLance",
+        [19] = "bloodangellance01"
     };
 
     private static readonly IReadOnlyDictionary<int, string> BowOverrides = new Dictionary<int, string>
     {
+        [7] = "arrows01",
+        [8] = "Crossbow01",
+        [9] = "Crossbow02",
+        [10] = "Crossbow03",
+        [11] = "Crossbow04",
+        [12] = "Crossbow05",
+        [13] = "Crossbow06",
+        [14] = "Crossbow07",
+        [15] = "arrows02",
+        [16] = "Crossbow17",
+        [17] = "bow18",
+        [18] = "bow19",
+        [19] = "Crossbow20",
+        [20] = "bow20",
         [21] = "HDK_Bow",
         [22] = "CW_Bow",
-        [23] = "Bow_24"
+        [23] = "Bow_24",
+        [24] = "gamblebow",
+        [25] = "bow26",
+        [26] = "devilcrossbow"
     };
 
     private static readonly IReadOnlyDictionary<int, string> StaffOverrides = new Dictionary<int, string>
     {
         [12] = "HDK_Staff",
         [13] = "CW_Staff",
+        [21] = "Book_of_Sahamutt",
+        [22] = "Book_of_Neil",
+        [23] = "Book_of_Rargle",
         [30] = "Staff_31",
-        [31] = "Staff_32"
+        [31] = "Staff_32",
+        [32] = "summonsprit",
+        [33] = "gamble_wand",
+        [34] = "gamble_stick",
+        [35] = "MiracleStaff",
+        [36] = "Archangelus",
+        [37] = "kerberos_spear_dark_road"
+    };
+
+    private static readonly IReadOnlyDictionary<int, string> ShieldOverrides = new Dictionary<int, string>
+    {
+        [17] = "Shield_18",
+        [18] = "Shield_19",
+        [19] = "Shield_20",
+        [20] = "Shield_21",
+        [21] = "crosssheild",
+        [22] = "CrazyWind",
+        [23] = "light_road",
+        [24] = "darkdevilS",
+        [25] = "hellnights",
+        [26] = "AmbitionShield",
+        [29] = "RapideShield",
+        [30] = "PlumaShield",
+        [31] = "AlacranShield",
+        [32] = "VisShield",
+        [34] = "elf_shield01"
     };
 
     // Source/model-table backed names for the wing-capable entries that are present in the
@@ -164,35 +230,42 @@ public sealed class PlayerItemModelResolver
                 ? $"Sword36{(left ? "L" : "R")}"
                 : $"Sword{(left ? "L" : "R")}{number}";
             yield return ItemCandidate(handName, "Main5.2 MonkSystem equipped-hand registration");
+            yield break;
         }
 
         var overrideName = item.Group switch
         {
             0 when SwordOverrides.TryGetValue(item.Id, out var name) => name,
             2 when MaceOverrides.TryGetValue(item.Id, out var name) => name,
+            3 when SpearOverrides.TryGetValue(item.Id, out var name) => name,
             4 when BowOverrides.TryGetValue(item.Id, out var name) => name,
             5 when StaffOverrides.TryGetValue(item.Id, out var name) => name,
+            6 when ShieldOverrides.TryGetValue(item.Id, out var name) => name,
             _ => null
         };
 
         if (!string.IsNullOrWhiteSpace(overrideName))
-            yield return ItemCandidate(overrideName, "Main5.2 explicit item-model registration");
-
-        var prefix = item.Group switch
         {
-            0 => "Sword",
-            1 => "Axe",
-            2 => "Mace",
-            3 => "Spear",
-            4 => "Bow",
-            5 => "Staff",
-            6 => "Shield",
-            _ => string.Empty
-        };
+            yield return ItemCandidate(overrideName, "Main5.2 explicit item-model registration");
+            yield break;
+        }
 
-        if (!string.IsNullOrEmpty(prefix))
-            yield return ItemCandidate(Numbered(prefix, item.Id + 1), "Main5.2 numbered item-model registration");
+        var genericName = TryGetGenericWeaponName(item.Group, item.Id);
+        if (!string.IsNullOrWhiteSpace(genericName))
+            yield return ItemCandidate(genericName, "Main5.2 numbered item-model registration");
     }
+
+    private static string? TryGetGenericWeaponName(int group, int id) => group switch
+    {
+        0 when id is >= 0 and <= 21 => Numbered("Sword", id + 1),
+        1 when id is >= 0 and <= 8 => Numbered("Axe", id + 1),
+        2 when id is >= 0 and <= 12 => Numbered("Mace", id + 1),
+        3 when id is >= 0 and <= 10 => Numbered("Spear", id + 1),
+        4 when id is >= 0 and <= 6 => Numbered("Bow", id + 1),
+        5 when id is >= 0 and <= 20 => Numbered("Staff", id + 1),
+        6 when id is >= 0 and <= 16 => Numbered("Shield", id + 1),
+        _ => null
+    };
 
     private static IEnumerable<ModelCandidate> BuildBodyCandidates(
         PlayerClassDefinition playerClass,
