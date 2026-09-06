@@ -34,6 +34,7 @@ public sealed class PlayerItemCatalogLoader
         var document = await _codec.ReadAsync(path, cancellationToken).ConfigureAwait(false);
         var items = document.DefinedItems
             .Select(ToPlayerItem)
+            .Where(PlayerEquipmentRules.IsPlayerEquipment)
             .ToArray();
 
         return new ItemCatalog(items);
