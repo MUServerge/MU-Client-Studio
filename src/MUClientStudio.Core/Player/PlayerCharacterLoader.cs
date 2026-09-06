@@ -180,7 +180,7 @@ public sealed class PlayerCharacterLoader
             PlayerEquipmentSlot.LeftWeapon,
             "Left Weapon",
             loadout.LeftWeapon,
-            item => item.Group is >= 0 and <= 6,
+            item => PlayerEquipmentRules.CanEquipInHand(item, definition.Id, PlayerEquipmentSlot.LeftWeapon),
             PlayerProfile.LeftWeaponBone,
             attachments,
             diagnostics,
@@ -191,7 +191,7 @@ public sealed class PlayerCharacterLoader
             PlayerEquipmentSlot.RightWeapon,
             "Right Weapon",
             loadout.RightWeapon,
-            item => item.Group is >= 0 and <= 6,
+            item => PlayerEquipmentRules.CanEquipInHand(item, definition.Id, PlayerEquipmentSlot.RightWeapon),
             PlayerProfile.RightWeaponBone,
             attachments,
             diagnostics,
@@ -202,7 +202,7 @@ public sealed class PlayerCharacterLoader
             PlayerEquipmentSlot.Wings,
             "Wings",
             loadout.Wings,
-            item => item.Group == 12,
+            PlayerEquipmentRules.IsStandardWing,
             PlayerProfile.WingBone,
             attachments,
             diagnostics,
@@ -255,7 +255,7 @@ public sealed class PlayerCharacterLoader
         if (item is null) return;
         if (!isValid(item))
         {
-            diagnostics.Add($"Ignored {label} item {item.Key}: item group does not match the slot.");
+            diagnostics.Add($"Ignored {label} item {item.Key}: item does not match the client slot/class rules.");
             return;
         }
 
